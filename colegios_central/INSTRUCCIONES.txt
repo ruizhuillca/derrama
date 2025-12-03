@@ -1,0 +1,52 @@
+INSTRUCCIONES PARA PUBLICAR EN GITHUB
+
+1. CREAR REPOSITORIO:
+   - Abre: https://github.com
+   - Regístrate (si no tienes cuenta)
+   - Clic en "+" -> "New repository"
+   - Nombre: mapa-colegios (o el que quieras)
+   - Marca "Public"
+   - Clic en "Create repository"
+
+2. SUBIR ARCHIVOS:
+   Método 1 (RECOMENDADO):
+   - En GitHub.com, ve a tu repositorio
+   - Clic en "Add file" -> "Upload files"
+   - Arrastra TODA esta carpeta
+   - Clic en "Commit changes"
+
+   Método 2 (GitHub Desktop):
+   - Descarga GitHub Desktop
+   - Clona tu repositorio
+   - Copia aquí los archivos
+   - Haz commit y push
+
+3. ACTIVAR GITHUB PAGES:
+   - En tu repositorio, ve a Settings -> Pages
+   - En "Source", selecciona "main" branch
+   - En "Folder", selecciona "/" (root)
+   - Clic en Save
+
+4. OBTENER TU URL:
+   - Espera 1-2 minutos
+   - Refresca la página
+   - Verás: "Your site is live at: https://TU_USUARIO.github.io/mapa-colegios/"
+   - ¡Comparte esa URL!
+
+ARCHIVOS GENERADOS:
+• index.html  - Mapa principal
+• README.md   - Instrucciones
+• .gitignore  - Archivos a ignorar
+
+ESTADÍSTICAS:
+• Colegios: 459
+• Cuadrillas: 45
+• Generado: 03/12/2025 09:14:20
+
+COLORES DE PRIORIDAD:
+• 🟢 VERDE: Alta
+• 🟠 ANARANJADO: Media
+• 🟡 AMARILLO: Baja
+• 🔴 ROJO: Muy Bajo
+
+CARPETA GENERADA: D:\Requerimientos\Propuesta de Zonificación - Gestión Campo\SEDECENTRAL\mapa_colegios_20251203_091420
