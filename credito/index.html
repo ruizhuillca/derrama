@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Colegios y Cuadrillas</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 100vh; }
+        
+        #panel { 
+            position: absolute; top: 10px; left: 10px; 
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px; border-radius: 10px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1000; max-width: 350px;
+            max-height: 80vh; overflow-y: auto;
+        }
+        
+        .panel-header {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 15px;
+            padding-bottom: 10px; border-bottom: 2px solid #dc3545;
+        }
+        
+        .panel-header h2 { color: #2c3e50; margin: 0; font-size: 1.2rem; }
+        
+        #toggle-panel {
+            background: #dc3545; color: white; border: none;
+            width: 30px; height: 30px; border-radius: 50%;
+            font-size: 1.2rem; cursor: pointer;
+        }
+        
+        .stats { margin: 15px 0; }
+        .stat-item {
+            display: flex; justify-content: space-between;
+            padding: 8px 0; border-bottom: 1px solid #eee;
+        }
+        
+        .legend { margin: 15px 0; padding: 12px; background: #f8f9fa; border-radius: 8px; }
+        .legend h4 { margin-bottom: 10px; color: #2c3e50; font-size: 1rem; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.9em; }
+        .legend-color { width: 20px; height: 20px; border-radius: 4px; margin-right: 10px; border: 1px solid rgba(0,0,0,0.1); }
+        
+        .toggle { margin: 15px 0; padding: 12px; background: #f8f9fa; border-radius: 8px; }
+        .toggle label { display: flex; align-items: center; cursor: pointer; font-weight: 500; }
+        .toggle input { margin-right: 10px; width: 18px; height: 18px; accent-color: #dc3545; }
+        
+        .instructions { margin-top: 15px; font-size: 0.9em; color: #666; padding: 10px; background: #f8f9fa; border-radius: 6px; }
+        
+        .btn {
+            position: absolute; bottom: 20px; right: 20px;
+            background: #dc3545; color: white; border: none;
+            width: 60px; height: 60px; border-radius: 50%;
+            font-size: 1.8rem; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 999;
+        }
+        
+        .btn-fullscreen { bottom: 90px; background: #fd7e14; }
+        
+        @media (max-width: 768px) {
+            #panel { top: 5px; left: 5px; right: 5px; max-width: none; }
+            .btn { width: 50px; height: 50px; font-size: 1.5rem; bottom: 15px; right: 15px; }
+            .btn-fullscreen { bottom: 75px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div id="panel">
+        <div class="panel-header">
+            <h2>🗺️ Mapa Interactivo</h2>
+            <button id="toggle-panel" title="Minimizar panel">−</button>
+        </div>
+        
+        <div class="panel-content">
+            <div class="stats">
+                <div class="stat-item">
+                    <span>🏫 Colegios:</span>
+                    <strong>449</strong>
+                </div>
+                <div class="stat-item">
+                    <span>📊 Cuadrillas:</span>
+                    <strong>45</strong>
+                </div>
+                <div class="stat-item">
+                    <span>📅 Generado:</span>
+                    <strong>05/12/2025</strong>
+                </div>
+            </div>
+            
+            <div class="legend">
+                <h4>🎨 Semáforo de Prioridades:</h4>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #dc3545;"></div>
+                    <span>🔴 ROJO: Alta</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #fd7e14;"></div>
+                    <span>🟠 ANARANJADO: Media</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ffc107;"></div>
+                    <span>🟡 AMARILLO: Bajo</span>
+                </div>
+            </div>
+            
+            <div class="toggle">
+                <label>
+                    <input type="checkbox" id="toggle-colegios" checked>
+                    Mostrar Colegios
+                </label>
+            </div>
+            
+            <div class="toggle">
+                <label>
+                    <input type="checkbox" id="toggle-cuadrillas" checked>
+                    Mostrar Cuadrillas
+                </label>
+            </div>
+            
+            <div class="instructions">
+                <p><strong>📱 Instrucciones:</strong></p>
+                <p>1. Haz clic en 📍 para tu ubicación</p>
+                <p>2. Haz clic en ⛶ para pantalla completa</p>
+                <p>3. Haz clic en − para minimizar panel</p>
+                <p>4. Haz clic en cualquier elemento para más info</p>
+            </div>
+        </div>
+    </div>
+    
+    <button class="btn" id="btn-location" title="Mi ubicación">📍</button>
+    <button class="btn btn-fullscreen" id="btn-fullscreen" title="Pantalla completa">⛶</button>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // =============================================
+        // 🎨 SISTEMA DE COLORES - TRES COLORES
+        // =============================================
+        
+        // Mapeo de colores según especificación:
+        // ROJO: Alta
+        // ANARANJADO: Media  
+        // AMARILLO: Bajo
+        const colores = {
+            // Colores básicos
+            'rojo': '#dc3545',       // ROJO para Alta
+            'anaranjado': '#fd7e14', // ANARANJADO para Media
+            'naranja': '#fd7e14',    // NARANJA (alternativo) para Media
+            'amarillo': '#ffc107',   // AMARILLO para Bajo
+            
+            // Prioridades específicas
+            'alta': '#dc3545',       // ALTA = ROJO
+            'media': '#fd7e14',      // MEDIA = ANARANJADO
+            'bajo': '#ffc107',       // BAJO = AMARILLO
+            
+            // Otras variaciones
+            'alto': '#dc3545',       // ALTO = ROJO
+            'medio': '#fd7e14',      // MEDIO = ANARANJADO
+            
+            // Con "prioridad" incluido
+            'prioridad alta': '#dc3545',
+            'prioridad media': '#fd7e14',
+            'prioridad bajo': '#ffc107',
+            
+            // Valores numéricos comunes
+            '1': '#dc3545',          // 1 = Alta = ROJO
+            '2': '#fd7e14',          // 2 = Media = ANARANJADO
+            '3': '#ffc107',          // 3 = Bajo = AMARILLO
+            'alta (1)': '#dc3545',
+            'media (2)': '#fd7e14',
+            'bajo (3)': '#ffc107'
+        };
+        
+        // Función para obtener color según prioridad
+        function obtenerColorSegunPrioridad(prioridad) {
+            if (!prioridad || prioridad.trim() === '') return '#3498db'; // Color por defecto (azul)
+            
+            const prioridadLower = prioridad.toString().toLowerCase().trim();
+            
+            console.log('🔍 Buscando color para prioridad:', prioridadLower);
+            
+            // 1. Buscar coincidencia EXACTA primero
+            if (colores[prioridadLower]) {
+                console.log('✅ Coincidencia exacta encontrada:', prioridadLower, '->', colores[prioridadLower]);
+                return colores[prioridadLower];
+            }
+            
+            // 2. Buscar por contenido (más flexible)
+            // ALTA = ROJO
+            if (prioridadLower.includes('alta') || prioridadLower.includes('alto') || 
+                prioridadLower.includes('1') || prioridadLower.includes('rojo')) {
+                console.log('✅ Detectado "alta/alto" -> ROJO');
+                return colores['alta'];
+            }
+            // MEDIA = ANARANJADO
+            if (prioridadLower.includes('media') || prioridadLower.includes('medio') || 
+                prioridadLower.includes('2') || prioridadLower.includes('anaranjado') || 
+                prioridadLower.includes('naranja')) {
+                console.log('✅ Detectado "media/medio" -> ANARANJADO');
+                return colores['media'];
+            }
+            // BAJO = AMARILLO
+            if (prioridadLower.includes('bajo') || prioridadLower.includes('baja') || 
+                prioridadLower.includes('3') || prioridadLower.includes('amarillo')) {
+                console.log('✅ Detectado "bajo/baja" -> AMARILLO');
+                return colores['bajo'];
+            }
+            
+            console.log('⚠️ No se encontró coincidencia, usando color por defecto');
+            return '#3498db'; // Color por defecto
+        }
+        
+        // Datos de las capas
+        const colegiosData = {"nombre": "colegio_credito", "tipo": "punto", "features": [{"fid": "1", "NOMB_IE": "0001 MARIA AUXILIADORA", "LATITUD_IE": "-12.04671", "LONGITUD_IE": "-77.01373", "DOCENTES": "26", "x": -77.01373, "y": -12.04671}, {"fid": "2", "NOMB_IE": "0002 HERMANO ANSELMO MARIA", "LATITUD_IE": "-12.0562", "LONGITUD_IE": "-77.04272", "DOCENTES": "35", "x": -77.04272, "y": -12.0562}, {"fid": "3", "NOMB_IE": "0003 NUESTRA SEÑORA DEL CARMEN", "LATITUD_IE": "-12.080919", "LONGITUD_IE": "-77.100751", "DOCENTES": "29", "x": -77.100751, "y": -12.080919}, {"fid": "4", "NOMB_IE": "0004 MARIANO MELGAR", "LATITUD_IE": "-12.06219", "LONGITUD_IE": "-77.05445", "DOCENTES": "32", "x": -77.05445, "y": -12.06219}, {"fid": "5", "NOMB_IE": "0005 ROSA DE SANTA MARIA", "LATITUD_IE": "-12.053427", "LONGITUD_IE": "-77.045407", "DOCENTES": "125", "x": -77.045407, "y": -12.053427}, {"fid": "6", "NOMB_IE": "0011 MADRE LORETO GABARRE", "LATITUD_IE": "-12.07568", "LONGITUD_IE": "-77.06157", "DOCENTES": "23", "x": -77.06157, "y": -12.07568}, {"fid": "7", "NOMB_IE": "0013 BERNARDO O'HIGGINS", "LATITUD_IE": "-12.07964", "LONGITUD_IE": "-77.07266", "DOCENTES": "30", "x": -77.07266, "y": -12.07964}, {"fid": "8", "NOMB_IE": "0014 ANDRES BELLO", "LATITUD_IE": "-12.0802", "LONGITUD_IE": "-77.07443", "DOCENTES": "30", "x": -77.07443, "y": -12.0802}, {"fid": "9", "NOMB_IE": "0028 JESUS Y MARIA", "LATITUD_IE": "-12.07615", "LONGITUD_IE": "-76.97365", "DOCENTES": "15", "x": -76.97365, "y": -12.07615}, {"fid": "10", "NOMB_IE": "0035 NUESTRA SEÑORA DE LA VISITACION", "LATITUD_IE": "-12.046186", "LONGITUD_IE": "-77.046883", "DOCENTES": "42", "x": -77.046883, "y": -12.046186}, {"fid": "11", "NOMB_IE": "0038 SAN MARTIN DE PORRES", "LATITUD_IE": "-12.03948", "LONGITUD_IE": "-77.04636", "DOCENTES": "15", "x": -77.04636, "y": -12.03948}, {"fid": "12", "NOMB_IE": "004 NIÑO JESUS DE PRAGA", "LATITUD_IE": "-12.07878", "LONGITUD_IE": "-77.0048", "DOCENTES": "13", "x": -77.0048, "y": -12.07878}, {"fid": "13", "NOMB_IE": "0040 HIPOLITO UNANUE", "LATITUD_IE": "-12.05265", "LONGITUD_IE": "-77.0704", "DOCENTES": "85", "x": -77.0704, "y": -12.05265}, {"fid": "14", "NOMB_IE": "005 JESUSITO MILAGROSO", "LATITUD_IE": "-12.08276", "LONGITUD_IE": "-77.03167", "DOCENTES": "24", "x": -77.03167, "y": -12.08276}, {"fid": "15", "NOMB_IE": "0082 LA CANTUTA", "LATITUD_IE": "-12.07265", "LONGITUD_IE": "-76.99159", "DOCENTES": "22", "x": -76.99159, "y": -12.07265}, {"fid": "16", "NOMB_IE": "0083 SAN JUAN MACIAS", "LATITUD_IE": "-12.07776", "LONGITUD_IE": "-77.002565", "DOCENTES": "51", "x": -77.002565, "y": -12.07776}, {"fid": "17", "NOMB_IE": "0094 SANTA MARIA DE MARANGA", "LATITUD_IE": "-12.07584", "LONGITUD_IE": "-77.09374", "DOCENTES": "20", "x": -77.09374, "y": -12.07584}, {"fid": "18", "NOMB_IE": "0099 OSCAR MIRO QUESADA DE LA GUERRA", "LATITUD_IE": "-12.04595", "LONGITUD_IE": "-77.02188", "DOCENTES": "16", "x": -77.02188, "y": -12.04595}, {"fid": "19", "NOMB_IE": "01 CORAZON DE MARIA", "LATITUD_IE": "-12.0845", "LONGITUD_IE": "-77.07075", "DOCENTES": "23", "x": -77.07075, "y": -12.0845}, {"fid": "20", "NOMB_IE": "01 SAN JUDAS TADEO", "LATITUD_IE": "-12.06147", "LONGITUD_IE": "-77.05125", "DOCENTES": "21", "x": -77.05125, "y": -12.06147}, {"fid": "21", "NOMB_IE": "0118 BERNARDINO JINEZ HUARINGA", "LATITUD_IE": "-12.092533", "LONGITUD_IE": "-77.079153", "DOCENTES": "1", "x": -77.079153, "y": -12.092533}, {"fid": "22", "NOMB_IE": "012 REPUBLICA DOMINICANA", "LATITUD_IE": "-12.10202", "LONGITUD_IE": "-77.06107", "DOCENTES": "4", "x": -77.06107, "y": -12.10202}, {"fid": "23", "NOMB_IE": "014 LA SAGRADA FAMILIA", "LATITUD_IE": "-12.09066", "LONGITUD_IE": "-77.06961", "DOCENTES": "34", "x": -77.06961, "y": -12.09066}, {"fid": "24", "NOMB_IE": "019 SAN MARTIN DE PORRES VELASQUEZ", "LATITUD_IE": "-12.07649", "LONGITUD_IE": "-77.01281", "DOCENTES": "1", "x": -77.01281, "y": -12.07649}, {"fid": "25", "NOMB_IE": "02 LAURA ALVA SALDAÑA", "LATITUD_IE": "-12.1548", "LONGITUD_IE": "-77.0172", "DOCENTES": "39", "x": -77.0172, "y": -12.1548}, {"fid": "26", "NOMB_IE": "02 MUNDO DE COLORES", "LATITUD_IE": "-12.05164", "LONGITUD_IE": "-77.04826", "DOCENTES": "16", "x": -77.04826, "y": -12.05164}, {"fid": "27", "NOMB_IE": "020 MADRE TERESA DE CALCUTA", "LATITUD_IE": "-12.069876", "LONGITUD_IE": "-77.00459", "DOCENTES": "11", "x": -77.00459, "y": -12.069876}, {"fid": "28", "NOMB_IE": "022 REPUBLICA DE GUATEMALA", "LATITUD_IE": "-12.04685", "LONGITUD_IE": "-77.01556", "DOCENTES": "31", "x": -77.01556, "y": -12.04685}, {"fid": "29", "NOMB_IE": "03 INMACULADA CONCEPCION", "LATITUD_IE": "-12.06462", "LONGITUD_IE": "-77.06007", "DOCENTES": "17", "x": -77.06007, "y": -12.06462}, {"fid": "30", "NOMB_IE": "030 SANTA TERESITA DEL DIVINO NIÑO", "LATITUD_IE": "-12.06868", "LONGITUD_IE": "-77.03501", "DOCENTES": "18", "x": -77.03501, "y": -12.06868}, {"fid": "31", "NOMB_IE": "04 NIÑO JESUS DE PRAGA", "LATITUD_IE": "-12.07137", "LONGITUD_IE": "-77.05348", "DOCENTES": "16", "x": -77.05348, "y": -12.07137}, {"fid": "32", "NOMB_IE": "055", "LATITUD_IE": "-12.06383", "LONGITUD_IE": "-77.00801", "DOCENTES": "18", "x": -77.00801, "y": -12.06383}, {"fid": "33", "NOMB_IE": "06 REPUBLICA DE HOLANDA", "LATITUD_IE": "-12.05526", "LONGITUD_IE": "-77.03562", "DOCENTES": "27", "x": -77.03562, "y": -12.05526}, {"fid": "34", "NOMB_IE": "06 REPUBLICA DOMINICANA", "LATITUD_IE": "-12.05471", "LONGITUD_IE": "-77.07517", "DOCENTES": "26", "x": -77.07517, "y": -12.05471}, {"fid": "35", "NOMB_IE": "07 LA INMACULADA", "LATITUD_IE": "-12.14441", "LONGITUD_IE": "-77.01976", "DOCENTES": "5", "x": -77.01976, "y": -12.14441}, {"fid": "36", "NOMB_IE": "072 SAN MARTIN DE PORRES", "LATITUD_IE": "-12.08718", "LONGITUD_IE": "-77.06889", "DOCENTES": "36", "x": -77.06889, "y": -12.08718}, {"fid": "37", "NOMB_IE": "075 SANTA MARIA DE GUADALUPE", "LATITUD_IE": "-12.05276", "LONGITUD_IE": "-77.05338", "DOCENTES": "7", "x": -77.05338, "y": -12.05276}, {"fid": "38", "NOMB_IE": "077 MANZANILLA", "LATITUD_IE": "-12.05753", "LONGITUD_IE": "-77.01097", "DOCENTES": "17", "x": -77.01097, "y": -12.05753}, {"fid": "39", "NOMB_IE": "08 PERU HOLANDA", "LATITUD_IE": "-12.07878", "LONGITUD_IE": "-77.0473", "DOCENTES": "31", "x": -77.0473, "y": -12.07878}, {"fid": "40", "NOMB_IE": "088 NIÑA MARIA", "LATITUD_IE": "-12.04297", "LONGITUD_IE": "-77.03416", "DOCENTES": "6", "x": -77.03416, "y": -12.04297}, {"fid": "41", "NOMB_IE": "09 SAN FRANCISCO DE ASIS", "LATITUD_IE": "-12.14078", "LONGITUD_IE": "-76.99566", "DOCENTES": "14", "x": -76.99566, "y": -12.14078}, {"fid": "42", "NOMB_IE": "09 SANTA LUCIA", "LATITUD_IE": "-12.05383", "LONGITUD_IE": "-77.08147", "DOCENTES": "16", "x": -77.08147, "y": -12.05383}, {"fid": "43", "NOMB_IE": "090 SANTA ROSITA DE LIMA", "LATITUD_IE": "-12.08728", "LONGITUD_IE": "-77.05213", "DOCENTES": "19", "x": -77.05213, "y": -12.08728}, {"fid": "44", "NOMB_IE": "091 SEÑOR DE LOS MILAGROS", "LATITUD_IE": "-12.0857", "LONGITUD_IE": "-77.0523", "DOCENTES": "9", "x": -77.0523, "y": -12.0857}, {"fid": "45", "NOMB_IE": "093 MANUELA FELICIA GOMEZ", "LATITUD_IE": "-12.06295", "LONGITUD_IE": "-77.02357", "DOCENTES": "42", "x": -77.02357, "y": -12.06295}, {"fid": "46", "NOMB_IE": "095 MEDALLA MILAGROSA", "LATITUD_IE": "-12.10504", "LONGITUD_IE": "-77.06065", "DOCENTES": "6", "x": -77.06065, "y": -12.10504}, {"fid": "47", "NOMB_IE": "096 EMILIA BARCIA BONIFFATTI", "LATITUD_IE": "-12.0634", "LONGITUD_IE": "-77.08496", "DOCENTES": "25", "x": -77.08496, "y": -12.0634}, {"fid": "48", "NOMB_IE": "097 MINISTERIO PUBLICO", "LATITUD_IE": "-12.05165", "LONGITUD_IE": "-77.02742", "DOCENTES": "2", "x": -77.02742, "y": -12.05165}, {"fid": "49", "NOMB_IE": "098 NIÑOS DE SAN JUDAS TADEO", "LATITUD_IE": "-12.0891", "LONGITUD_IE": "-77.05389", "DOCENTES": "12", "x": -77.05389, "y": -12.0891}, {"fid": "50", "NOMB_IE": "10 PEDRO DE OSMA", "LATITUD_IE": "-12.13916", "LONGITUD_IE": "-77.02326", "DOCENTES": "18", "x": -77.02326, "y": -12.13916}, {"fid": "51", "NOMB_IE": "10 SOLIDARIDAD", "LATITUD_IE": "-12.07018", "LONGITUD_IE": "-77.00418", "DOCENTES": "26", "x": -77.00418, "y": -12.07018}, {"fid": "52", "NOMB_IE": "1001 JOSE JIMENEZ BORJA", "LATITUD_IE": "-12.05908", "LONGITUD_IE": "-77.03922", "DOCENTES": "41", "x": -77.03922, "y": -12.05908}, {"fid": "53", "NOMB_IE": "1003 REPUBLICA DE COLOMBIA", "LATITUD_IE": "-12.05244", "LONGITUD_IE": "-77.05322", "DOCENTES": "18", "x": -77.05322, "y": -12.05244}, {"fid": "54", "NOMB_IE": "1005 JORGE CHAVEZ DARTNELL", "LATITUD_IE": "-12.05624", "LONGITUD_IE": "-77.04776", "DOCENTES": "22", "x": -77.04776, "y": -12.05624}, {"fid": "55", "NOMB_IE": "1006 MARISCAL ANDRES AVELINO CACERES", "LATITUD_IE": "-12.05563", "LONGITUD_IE": "-77.0446", "DOCENTES": "20", "x": -77.0446, "y": -12.05563}, {"fid": "56", "NOMB_IE": "1008 VIRGEN DE LOURDES", "LATITUD_IE": "-12.05584", "LONGITUD_IE": "-77.04707", "DOCENTES": "24", "x": -77.04707, "y": -12.05584}, {"fid": "57", "NOMB_IE": "101 LIBERTADOR SIMON BOLIVAR", "LATITUD_IE": "-12.040281", "LONGITUD_IE": "-77.051309", "DOCENTES": "13", "x": -77.051309, "y": -12.040281}, {"fid": "58", "NOMB_IE": "1014 REP. ORIENTAL DEL URUGUAY", "LATITUD_IE": "-12.05614", "LONGITUD_IE": "-77.04789", "DOCENTES": "22", "x": -77.04789, "y": -12.05614}, {"fid": "59", "NOMB_IE": "1015 REPUBLICA DE ITALIA", "LATITUD_IE": "-12.05946", "LONGITUD_IE": "-77.07164", "DOCENTES": "20", "x": -77.07164, "y": -12.05946}, {"fid": "60", "NOMB_IE": "1016 JOHN F. KENNEDY", "LATITUD_IE": "-12.0589", "LONGITUD_IE": "-77.07191", "DOCENTES": "14", "x": -77.07191, "y": -12.0589}, {"fid": "61", "NOMB_IE": "1017 SEÑOR DE LOS MILAGROS", "LATITUD_IE": "-12.06122", "LONGITUD_IE": "-77.05545", "DOCENTES": "24", "x": -77.05545, "y": -12.06122}, {"fid": "62", "NOMB_IE": "1019 CHAVIN", "LATITUD_IE": "-12.052576", "LONGITUD_IE": "-77.04449", "DOCENTES": "16", "x": -77.04449, "y": -12.052576}, {"fid": "63", "NOMB_IE": "102 HOSPITAL DOS DE MAYO", "LATITUD_IE": "-12.05672", "LONGITUD_IE": "-77.01668", "DOCENTES": "5", "x": -77.01668, "y": -12.05672}, {"fid": "64", "NOMB_IE": "1021 REPUBLICA FEDERAL DE ALEMANIA", "LATITUD_IE": "-12.0644", "LONGITUD_IE": "-77.06369", "DOCENTES": "26", "x": -77.06369, "y": -12.0644}, {"fid": "65", "NOMB_IE": "1027 REPUBLICA DE NICARAGUA", "LATITUD_IE": "-12.04557", "LONGITUD_IE": "-77.01448", "DOCENTES": "7", "x": -77.01448, "y": -12.04557}, {"fid": "66", "NOMB_IE": "1028 REPUBLICA ARGENTINA", "LATITUD_IE": "-12.05314", "LONGITUD_IE": "-77.01645", "DOCENTES": "8", "x": -77.01645, "y": -12.05314}, {"fid": "67", "NOMB_IE": "103 LUIS ARMANDO CABELLO HURTADO", "LATITUD_IE": "-12.05834", "LONGITUD_IE": "-77.01134", "DOCENTES": "44", "x": -77.01134, "y": -12.05834}, {"fid": "68", "NOMB_IE": "1030 REPUBLICA DE BOLIVIA", "LATITUD_IE": "-12.06293", "LONGITUD_IE": "-77.02867", "DOCENTES": "13", "x": -77.02867, "y": -12.06293}, {"fid": "69", "NOMB_IE": "1032 REPUBLICA DEL BRASIL", "LATITUD_IE": "-12.05586", "LONGITUD_IE": "-77.02194", "DOCENTES": "25", "x": -77.02194, "y": -12.05586}, {"fid": "70", "NOMB_IE": "1035 JOSE DEL CARMEN MARIN ARISTA", "LATITUD_IE": "-12.05579", "LONGITUD_IE": "-77.02819", "DOCENTES": "67", "x": -77.02819, "y": -12.05579}, {"fid": "71", "NOMB_IE": "1036 REPUBLICA DE COSTA RICA", "LATITUD_IE": "-12.04939", "LONGITUD_IE": "-77.01234", "DOCENTES": "45", "x": -77.01234, "y": -12.04939}, {"fid": "72", "NOMB_IE": "1037 RAMON ESPINOZA", "LATITUD_IE": "-12.04673", "LONGITUD_IE": "-77.01667", "DOCENTES": "19", "x": -77.01667, "y": -12.04673}, {"fid": "73", "NOMB_IE": "1038 MARIA PARADO DE BELLIDO", "LATITUD_IE": "-12.04723", "LONGITUD_IE": "-77.02355", "DOCENTES": "23", "x": -77.02355, "y": -12.04723}, {"fid": "74", "NOMB_IE": "104 VIRGEN DE LA PUERTA", "LATITUD_IE": "-12.06981", "LONGITUD_IE": "-77.02453", "DOCENTES": "18", "x": -77.02453, "y": -12.06981}, {"fid": "75", "NOMB_IE": "1040 REPUBLICA DE HAITI", "LATITUD_IE": "-12.053743", "LONGITUD_IE": "-77.032506", "DOCENTES": "11", "x": -77.032506, "y": -12.053743}, {"fid": "76", "NOMB_IE": "1048 VIRGEN PURISIMA", "LATITUD_IE": "-12.044165", "LONGITUD_IE": "-77.014472", "DOCENTES": "8", "x": -77.014472, "y": -12.044165}, {"fid": "77", "NOMB_IE": "1049 JUANA ALARCO DE DAMMERT", "LATITUD_IE": "-12.05116", "LONGITUD_IE": "-77.03003", "DOCENTES": "51", "x": -77.03003, "y": -12.05116}, {"fid": "78", "NOMB_IE": "105 PEDRO CORONADO ARRASCUE", "LATITUD_IE": "-12.04086", "LONGITUD_IE": "-77.0443", "DOCENTES": "18", "x": -77.0443, "y": -12.04086}, {"fid": "79", "NOMB_IE": "1051 EL OLIVAR", "LATITUD_IE": "-12.1021", "LONGITUD_IE": "-77.0332", "DOCENTES": "10", "x": -77.0332, "y": -12.1021}, {"fid": "80", "NOMB_IE": "1057 JOSE BAQUIJANO Y CARRILLO", "LATITUD_IE": "-12.08181", "LONGITUD_IE": "-77.0414", "DOCENTES": "49", "x": -77.0414, "y": -12.08181}, {"fid": "81", "NOMB_IE": "1059 MARIA INMACULADA", "LATITUD_IE": "-12.0827", "LONGITUD_IE": "-77.03168", "DOCENTES": "30", "x": -77.03168, "y": -12.0827}, {"fid": "82", "NOMB_IE": "106 JUAN RAGGIO CHICHIZOLA", "LATITUD_IE": "-12.09371", "LONGITUD_IE": "-77.07075", "DOCENTES": "17", "x": -77.07075, "y": -12.09371}, {"fid": "83", "NOMB_IE": "106 RAMON ESPINOZA", "LATITUD_IE": "-12.04673", "LONGITUD_IE": "-77.01667", "DOCENTES": "6", "x": -77.01667, "y": -12.04673}, {"fid": "84", "NOMB_IE": "1065 MARIA REICHE", "LATITUD_IE": "-12.10727", "LONGITUD_IE": "-77.05449", "DOCENTES": "3", "x": -77.05449, "y": -12.10727}, {"fid": "85", "NOMB_IE": "107 VIRGEN DE LA MEDALLA MILAGROSA", "LATITUD_IE": "-12.051", "LONGITUD_IE": "-77.04134", "DOCENTES": "2", "x": -77.04134, "y": -12.051}, {"fid": "86", "NOMB_IE": "1070 MELITON CARVAJAL", "LATITUD_IE": "-12.08481", "LONGITUD_IE": "-77.02604", "DOCENTES": "136", "x": -77.02604, "y": -12.08481}, {"fid": "87", "NOMB_IE": "1071 ALFONSO UGARTE", "LATITUD_IE": "-12.09905", "LONGITUD_IE": "-77.02662", "DOCENTES": "106", "x": -77.02662, "y": -12.09905}, {"fid": "88", "NOMB_IE": "1073 HERMANN BUSE DE LA GUERRA", "LATITUD_IE": "-12.07833", "LONGITUD_IE": "-77.06132", "DOCENTES": "20", "x": -77.06132, "y": -12.07833}, {"fid": "89", "NOMB_IE": "1074 REPUBLICA DE IRLANDA", "LATITUD_IE": "-12.06832", "LONGITUD_IE": "-77.05723", "DOCENTES": "9", "x": -77.05723, "y": -12.06832}, {"fid": "90", "NOMB_IE": "1076 RABINDRANATH TAGORE", "LATITUD_IE": "-12.07598", "LONGITUD_IE": "-77.0779", "DOCENTES": "23", "x": -77.0779, "y": -12.07598}, {"fid": "91", "NOMB_IE": "1086 JESUS REDENTOR", "LATITUD_IE": "-12.07567", "LONGITUD_IE": "-77.10465", "DOCENTES": "55", "x": -77.10465, "y": -12.07567}, {"fid": "92", "NOMB_IE": "1087 GRAL ROQUE SAENZ PEÑA", "LATITUD_IE": "-12.08751", "LONGITUD_IE": "-77.08933", "DOCENTES": "47", "x": -77.08933, "y": -12.08751}, {"fid": "93", "NOMB_IE": "1088 FRANCISCO BOLOGNESI", "LATITUD_IE": "-12.0949", "LONGITUD_IE": "-77.07184", "DOCENTES": "61", "x": -77.07184, "y": -12.0949}, {"fid": "94", "NOMB_IE": "109 SAN JOSE", "LATITUD_IE": "-12.07649", "LONGITUD_IE": "-77.01281", "DOCENTES": "6", "x": -77.01281, "y": -12.07649}, {"fid": "95", "NOMB_IE": "1090 CRNL FAP MARCO ANTONIO SCHENONE OLIVA", "LATITUD_IE": "-12.09342", "LONGITUD_IE": "-77.07079", "DOCENTES": "21", "x": -77.07079, "y": -12.09342}, {"fid": "96", "NOMB_IE": "1094 JACARANDA", "LATITUD_IE": "-12.09381", "LONGITUD_IE": "-77.06233", "DOCENTES": "25", "x": -77.06233, "y": -12.09381}, {"fid": "97", "NOMB_IE": "1098 CAP. FAP JOSE ABELARDO QUIÑONES", "LATITUD_IE": "-12.0774", "LONGITUD_IE": "-77.05271", "DOCENTES": "27", "x": -77.05271, "y": -12.0774}, {"fid": "98", "NOMB_IE": "1099 COMP EDUC EXP AUGUSTO PEREZ ARANIBAR", "LATITUD_IE": "-12.09941", "LONGITUD_IE": "-77.06552", "DOCENTES": "2", "x": -77.06552, "y": -12.09941}, {"fid": "99", "NOMB_IE": "1101", "LATITUD_IE": "-12.04592", "LONGITUD_IE": "-77.030496", "DOCENTES": "4", "x": -77.030496, "y": -12.04592}, {"fid": "100", "NOMB_IE": "1103 ELVIRA GARCIA Y GARCIA", "LATITUD_IE": "-12.06777", "LONGITUD_IE": "-77.0546", "DOCENTES": "117", "x": -77.0546, "y": -12.06777}, {"fid": "101", "NOMB_IE": "1104 CRNEL. FAP VICTOR MALDONADO BEGAZO", "LATITUD_IE": "-12.09025", "LONGITUD_IE": "-77.06873", "DOCENTES": "23", "x": -77.06873, "y": -12.09025}, {"fid": "102", "NOMB_IE": "1105 LA SAGRADA FAMILIA", "LATITUD_IE": "-12.06632", "LONGITUD_IE": "-77.02097", "DOCENTES": "40", "x": -77.02097, "y": -12.06632}, {"fid": "103", "NOMB_IE": "1107 JAVIER PRADO", "LATITUD_IE": "-12.06295", "LONGITUD_IE": "-77.02107", "DOCENTES": "34", "x": -77.02107, "y": -12.06295}, {"fid": "104", "NOMB_IE": "111 ARZOBISPO LOAYZA", "LATITUD_IE": "-12.049455", "LONGITUD_IE": "-77.044792", "DOCENTES": "5", "x": -77.044792, "y": -12.049455}, {"fid": "105", "NOMB_IE": "111 SAN JOSE DE ARTESANOS", "LATITUD_IE": "-12.04645", "LONGITUD_IE": "-77.02476", "DOCENTES": "39", "x": -77.02476, "y": -12.04645}, {"fid": "106", "NOMB_IE": "1110 REPUBLICA DE PANAMA", "LATITUD_IE": "-12.06478", "LONGITUD_IE": "-77.03003", "DOCENTES": "70", "x": -77.03003, "y": -12.06478}, {"fid": "107", "NOMB_IE": "1111 JOSE ANTONIO ENCINAS", "LATITUD_IE": "-12.06615", "LONGITUD_IE": "-77.01139", "DOCENTES": "28", "x": -77.01139, "y": -12.06615}, {"fid": "108", "NOMB_IE": "1112 VICTOR ANDRES BELAUNDE", "LATITUD_IE": "-12.08435", "LONGITUD_IE": "-77.01979", "DOCENTES": "61", "x": -77.01979, "y": -12.08435}, {"fid": "109", "NOMB_IE": "1117 ANDRES AVELINO ARAMBURU", "LATITUD_IE": "-12.06925", "LONGITUD_IE": "-77.03136", "DOCENTES": "9", "x": -77.03136, "y": -12.06925}, {"fid": "110", "NOMB_IE": "1119 NUESTRA SEÑORA DEL ROSARIO DE FATIMA", "LATITUD_IE": "-12.07034", "LONGITUD_IE": "-77.02166", "DOCENTES": "25", "x": -77.02166, "y": -12.07034}, {"fid": "111", "NOMB_IE": "112 PEQUEÑOS DE FATIMA", "LATITUD_IE": "-12.06315", "LONGITUD_IE": "-77.06569", "DOCENTES": "9", "x": -77.06569, "y": -12.06315}, {"fid": "112", "NOMB_IE": "1120 PEDRO ADOLFO LABARTHE EFFIO", "LATITUD_IE": "-12.069876", "LONGITUD_IE": "-77.00459", "DOCENTES": "167", "x": -77.00459, "y": -12.069876}, {"fid": "113", "NOMB_IE": "1123 SAGRADO CORAZON DE JESUS", "LATITUD_IE": "-12.05946", "LONGITUD_IE": "-77.02064", "DOCENTES": "39", "x": -77.02064, "y": -12.05946}, {"fid": "114", "NOMB_IE": "1124 JOSE MARTI", "LATITUD_IE": "-12.0618", "LONGITUD_IE": "-77.007", "DOCENTES": "46", "x": -77.007, "y": -12.0618}, {"fid": "115", "NOMB_IE": "1127 LINCOLN", "LATITUD_IE": "-12.07061", "LONGITUD_IE": "-77.00867", "DOCENTES": "21", "x": -77.00867, "y": -12.07061}, {"fid": "116", "NOMB_IE": "1128 SAN LUIS", "LATITUD_IE": "-12.07143", "LONGITUD_IE": "-76.99708", "DOCENTES": "61", "x": -76.99708, "y": -12.07143}, {"fid": "117", "NOMB_IE": "1129 CORAZON DE JESUS", "LATITUD_IE": "-12.07916", "LONGITUD_IE": "-77.01963", "DOCENTES": "36", "x": -77.01963, "y": -12.07916}, {"fid": "118", "NOMB_IE": "1131 ROMULO ADRIAN CORDOVA HUAMAN", "LATITUD_IE": "-12.07319", "LONGITUD_IE": "-77.01943", "DOCENTES": "24", "x": -77.01943, "y": -12.07319}, {"fid": "119", "NOMB_IE": "1133 SANTISIMA VIRGEN DE FATIMA", "LATITUD_IE": "-12.06484", "LONGITUD_IE": "-76.99684", "DOCENTES": "24", "x": -76.99684, "y": -12.06484}, {"fid": "120", "NOMB_IE": "1136 JOHN F. KENNEDY", "LATITUD_IE": "-12.07452", "LONGITUD_IE": "-76.9871", "DOCENTES": "34", "x": -76.9871, "y": -12.07452}, {"fid": "121", "NOMB_IE": "1145 REPUBLICA DE VENEZUELA", "LATITUD_IE": "-12.04199", "LONGITUD_IE": "-77.03806", "DOCENTES": "21", "x": -77.03806, "y": -12.04199}, {"fid": "122", "NOMB_IE": "1146 REPUBLICA DEL PARAGUAY", "LATITUD_IE": "-12.04518", "LONGITUD_IE": "-77.03971", "DOCENTES": "37", "x": -77.03971, "y": -12.04518}, {"fid": "123", "NOMB_IE": "1147 ANDRES ROSALES VALENCIA", "LATITUD_IE": "-12.04637", "LONGITUD_IE": "-77.04037", "DOCENTES": "10", "x": -77.04037, "y": -12.04637}, {"fid": "124", "NOMB_IE": "1148 JUANA INFANTES VERA", "LATITUD_IE": "-12.05351", "LONGITUD_IE": "-77.08315", "DOCENTES": "30", "x": -77.08315, "y": -12.05351}, {"fid": "125", "NOMB_IE": "1149 SAGRADO CORAZON DE JESUS", "LATITUD_IE": "-12.046434", "LONGITUD_IE": "-77.044921", "DOCENTES": "22", "x": -77.044921, "y": -12.046434}, {"fid": "126", "NOMB_IE": "1154 NUESTRA SEÑORA DEL CARMEN", "LATITUD_IE": "-12.0526", "LONGITUD_IE": "-77.06866", "DOCENTES": "48", "x": -77.06866, "y": -12.0526}, {"fid": "127", "NOMB_IE": "1156 JOSE SEBASTIAN BARRANCA LOVERA", "LATITUD_IE": "-12.03836", "LONGITUD_IE": "-77.05367", "DOCENTES": "25", "x": -77.05367, "y": -12.03836}, {"fid": "128", "NOMB_IE": "116 SAN PABLO", "LATITUD_IE": "-12.04209", "LONGITUD_IE": "-77.04295", "DOCENTES": "17", "x": -77.04295, "y": -12.04209}, {"fid": "129", "NOMB_IE": "1160 JOSE FAUSTINO SANCHEZ CARRION", "LATITUD_IE": "-12.0427", "LONGITUD_IE": "-77.0561", "DOCENTES": "26", "x": -77.0561, "y": -12.0427}, {"fid": "130", "NOMB_IE": "1161", "LATITUD_IE": "-12.03672", "LONGITUD_IE": "-77.06077", "DOCENTES": "24", "x": -77.06077, "y": -12.03672}, {"fid": "131", "NOMB_IE": "1162 DIVINO NIÑO JESUS", "LATITUD_IE": "-12.049", "LONGITUD_IE": "-77.03559", "DOCENTES": "19", "x": -77.03559, "y": -12.049}, {"fid": "132", "NOMB_IE": "1163 JOSE MARIA ARGUEDAS ALTAMIRANO", "LATITUD_IE": "-12.0394", "LONGITUD_IE": "-77.05658", "DOCENTES": "23", "x": -77.05658, "y": -12.0394}, {"fid": "133", "NOMB_IE": "1165 HOLANDA", "LATITUD_IE": "-12.051252", "LONGITUD_IE": "-77.063076", "DOCENTES": "13", "x": -77.063076, "y": -12.051252}, {"fid": "134", "NOMB_IE": "1166 LIBERTADOR SIMON BOLIVAR", "LATITUD_IE": "-12.040281", "LONGITUD_IE": "-77.051309", "DOCENTES": "34", "x": -77.051309, "y": -12.040281}, {"fid": "135", "NOMB_IE": "1168 HEROES DEL CENEPA", "LATITUD_IE": "-12.05144", "LONGITUD_IE": "-77.02293", "DOCENTES": "68", "x": -77.02293, "y": -12.05144}, {"fid": "136", "NOMB_IE": "12 AUGUSTO PEREZ ARANIBAR", "LATITUD_IE": "-12.07536", "LONGITUD_IE": "-77.05777", "DOCENTES": "17", "x": -77.05777, "y": -12.07536}, {"fid": "137", "NOMB_IE": "12 BEATO EDMUNDO RICE", "LATITUD_IE": "-12.18196", "LONGITUD_IE": "-77.00925", "DOCENTES": "19", "x": -77.00925, "y": -12.18196}, {"fid": "138", "NOMB_IE": "1201 PAUL HARRIS", "LATITUD_IE": "-12.07056", "LONGITUD_IE": "-77.01859", "DOCENTES": "22", "x": -77.01859, "y": -12.07056}, {"fid": "139", "NOMB_IE": "1204 VILLA JARDIN", "LATITUD_IE": "-12.07772", "LONGITUD_IE": "-76.99265", "DOCENTES": "32", "x": -76.99265, "y": -12.07772}, {"fid": "140", "NOMB_IE": "1209 MARISCAL TORIBIO DE LUZURIAGA", "LATITUD_IE": "-12.07416", "LONGITUD_IE": "-76.97915", "DOCENTES": "36", "x": -76.97915, "y": -12.07416}, {"fid": "141", "NOMB_IE": "121 VIRGEN DE FATIMA", "LATITUD_IE": "-12.07518", "LONGITUD_IE": "-76.97328", "DOCENTES": "4", "x": -76.97328, "y": -12.07518}, {"fid": "142", "NOMB_IE": "1214 SEÑOR DE LOS MILAGROS", "LATITUD_IE": "-12.08815", "LONGITUD_IE": "-77.06906", "DOCENTES": "22", "x": -77.06906, "y": -12.08815}, {"fid": "143", "NOMB_IE": "1216 MIGUEL GRAU SEMINARIO", "LATITUD_IE": "-12.07339", "LONGITUD_IE": "-76.99911", "DOCENTES": "25", "x": -76.99911, "y": -12.07339}, {"fid": "144", "NOMB_IE": "122 EL EDEN", "LATITUD_IE": "-12.06157", "LONGITUD_IE": "-77.00661", "DOCENTES": "10", "x": -77.00661, "y": -12.06157}, {"fid": "145", "NOMB_IE": "123 PAUL HARRIS", "LATITUD_IE": "-12.06983", "LONGITUD_IE": "-77.01862", "DOCENTES": "7", "x": -77.01862, "y": -12.06983}, {"fid": "146", "NOMB_IE": "1231 JOSE LUIS BUSTAMANTE Y RIVERO", "LATITUD_IE": "-12.06874", "LONGITUD_IE": "-76.97919", "DOCENTES": "16", "x": -76.97919, "y": -12.06874}, {"fid": "147", "NOMB_IE": "1232 JOSE GRANDA", "LATITUD_IE": "-12.04592", "LONGITUD_IE": "-77.030496", "DOCENTES": "1", "x": -77.030496, "y": -12.04592}, {"fid": "148", "NOMB_IE": "126 VIRGEN DEL CARMEN", "LATITUD_IE": "-12.08844", "LONGITUD_IE": "-77.06816", "DOCENTES": "14", "x": -77.06816, "y": -12.08844}, {"fid": "149", "NOMB_IE": "127 TERESA GONZALES DE FANNING", "LATITUD_IE": "-12.07713", "LONGITUD_IE": "-77.04575", "DOCENTES": "16", "x": -77.04575, "y": -12.07713}, {"fid": "150", "NOMB_IE": "129", "LATITUD_IE": "-12.07711", "LONGITUD_IE": "-76.9975", "DOCENTES": "14", "x": -76.9975, "y": -12.07711}, {"fid": "151", "NOMB_IE": "13", "LATITUD_IE": "-12.149707", "LONGITUD_IE": "-77.021276", "DOCENTES": "1", "x": -77.021276, "y": -12.149707}, {"fid": "152", "NOMB_IE": "133 FERNANDO LUNA DEMUTTI", "LATITUD_IE": "-12.07802", "LONGITUD_IE": "-76.99343", "DOCENTES": "12", "x": -76.99343, "y": -12.07802}, {"fid": "153", "NOMB_IE": "135 NIÑO JESUS", "LATITUD_IE": "-12.0733", "LONGITUD_IE": "-76.98087", "DOCENTES": "6", "x": -76.98087, "y": -12.0733}, {"fid": "154", "NOMB_IE": "138 MI CASITA DE SORPRESAS", "LATITUD_IE": "-12.10804", "LONGITUD_IE": "-77.01388", "DOCENTES": "6", "x": -77.01388, "y": -12.10804}, {"fid": "155", "NOMB_IE": "14 DIVINA NIÑA MARIA", "LATITUD_IE": "-12.05148", "LONGITUD_IE": "-77.07845", "DOCENTES": "10", "x": -77.07845, "y": -12.05148}, {"fid": "156", "NOMB_IE": "15 VIRGEN DE LOURDES", "LATITUD_IE": "-12.12221", "LONGITUD_IE": "-77.03272", "DOCENTES": "13", "x": -77.03272, "y": -12.12221}, {"fid": "157", "NOMB_IE": "16 ALMIRANTE MIGUEL GRAU", "LATITUD_IE": "-12.0908", "LONGITUD_IE": "-77.08223", "DOCENTES": "36", "x": -77.08223, "y": -12.0908}, {"fid": "158", "NOMB_IE": "16 VIRGEN DE LOURDES", "LATITUD_IE": "-12.05413", "LONGITUD_IE": "-77.08195", "DOCENTES": "10", "x": -77.08195, "y": -12.05413}, {"fid": "159", "NOMB_IE": "1719 SAN ANTONIO DE PADUA", "LATITUD_IE": "-12.082632", "LONGITUD_IE": "-77.053735", "DOCENTES": "2", "x": -77.053735, "y": -12.082632}, {"fid": "160", "NOMB_IE": "172 JOSE LUIS BUSTAMANTE Y RIVERO", "LATITUD_IE": "-12.063", "LONGITUD_IE": "-77.08738", "DOCENTES": "8", "x": -77.08738, "y": -12.063}, {"fid": "161", "NOMB_IE": "19 EL PLANETA", "LATITUD_IE": "-12.03782", "LONGITUD_IE": "-77.06353", "DOCENTES": "23", "x": -77.06353, "y": -12.03782}, {"fid": "162", "NOMB_IE": "20 SANTA ROSA DE LIMA", "LATITUD_IE": "-12.06664", "LONGITUD_IE": "-77.07132", "DOCENTES": "28", "x": -77.07132, "y": -12.06664}, {"fid": "163", "NOMB_IE": "24 ROSA IRENE INFANTES DE CANALES", "LATITUD_IE": "-12.08371", "LONGITUD_IE": "-77.0812", "DOCENTES": "37", "x": -77.0812, "y": -12.08371}, {"fid": "164", "NOMB_IE": "25 NUESTRA SEÑORA DE LA INMACULADA CONCEPCION", "LATITUD_IE": "-12.05138", "LONGITUD_IE": "-77.0173", "DOCENTES": "21", "x": -77.0173, "y": -12.05138}, {"fid": "165", "NOMB_IE": "26 NIÑO JESUS DE ATOCHE", "LATITUD_IE": "-12.05313", "LONGITUD_IE": "-77.01749", "DOCENTES": "14", "x": -77.01749, "y": -12.05313}, {"fid": "166", "NOMB_IE": "28 RAMON CASTILLA", "LATITUD_IE": "-12.04981", "LONGITUD_IE": "-77.02579", "DOCENTES": "1", "x": -77.02579, "y": -12.04981}, {"fid": "167", "NOMB_IE": "29 ROSA DE SANTA MARIA", "LATITUD_IE": "-12.04463", "LONGITUD_IE": "-77.01423", "DOCENTES": "10", "x": -77.01423, "y": -12.04463}, {"fid": "168", "NOMB_IE": "3013", "LATITUD_IE": "-12.0375", "LONGITUD_IE": "-77.04145", "DOCENTES": "15", "x": -77.04145, "y": -12.0375}, {"fid": "169", "NOMB_IE": "31", "LATITUD_IE": "-12.0595", "LONGITUD_IE": "-77.009", "DOCENTES": "9", "x": -77.009, "y": -12.0595}, {"fid": "170", "NOMB_IE": "42 ELIZABETH ESPEJO DE MARROQUIN", "LATITUD_IE": "-12.1192", "LONGITUD_IE": "-77.0153", "DOCENTES": "26", "x": -77.0153, "y": -12.1192}, {"fid": "171", "NOMB_IE": "48 JUANA ALARCO DE DAMMERT", "LATITUD_IE": "-12.05295", "LONGITUD_IE": "-77.01681", "DOCENTES": "12", "x": -77.01681, "y": -12.05295}, {"fid": "172", "NOMB_IE": "50 LA SAGRADA FAMILIA", "LATITUD_IE": "-12.048095", "LONGITUD_IE": "-77.036974", "DOCENTES": "10", "x": -77.036974, "y": -12.048095}, {"fid": "173", "NOMB_IE": "501 MONSEÑOR DAMASO LEBERGERE", "LATITUD_IE": "-12.06523", "LONGITUD_IE": "-77.00175", "DOCENTES": "24", "x": -77.00175, "y": -12.06523}, {"fid": "174", "NOMB_IE": "518 LOS ANGELES DE JESUS", "LATITUD_IE": "-12.17658", "LONGITUD_IE": "-77.0094", "DOCENTES": "9", "x": -77.0094, "y": -12.17658}, {"fid": "175", "NOMB_IE": "522 MARIA INMACULADA", "LATITUD_IE": "-12.10761", "LONGITUD_IE": "-77.00247", "DOCENTES": "14", "x": -77.00247, "y": -12.10761}, {"fid": "176", "NOMB_IE": "528 ALEGRIA DE JESUS", "LATITUD_IE": "-12.1113", "LONGITUD_IE": "-77.00511", "DOCENTES": "11", "x": -77.00511, "y": -12.1113}, {"fid": "177", "NOMB_IE": "53 MI NIÑITO JESUS", "LATITUD_IE": "-12.118196", "LONGITUD_IE": "-77.004675", "DOCENTES": "12", "x": -77.004675, "y": -12.118196}, {"fid": "178", "NOMB_IE": "536 AMIGUITOS DE JESUS", "LATITUD_IE": "-12.13696", "LONGITUD_IE": "-77.00099", "DOCENTES": "7", "x": -77.00099, "y": -12.13696}, {"fid": "179", "NOMB_IE": "542 LOS SAUCES", "LATITUD_IE": "-12.1219", "LONGITUD_IE": "-77.0025", "DOCENTES": "9", "x": -77.0025, "y": -12.1219}, {"fid": "180", "NOMB_IE": "554 VIRGEN DE LOURDES", "LATITUD_IE": "-12.08459", "LONGITUD_IE": "-77.00028", "DOCENTES": "14", "x": -77.00028, "y": -12.08459}, {"fid": "181", "NOMB_IE": "556 NIÑO JESUS DE DAMMERT MUELLE", "LATITUD_IE": "-12.10676", "LONGITUD_IE": "-77.02536", "DOCENTES": "8", "x": -77.02536, "y": -12.10676}, {"fid": "182", "NOMB_IE": "557 WARMA KUYAY", "LATITUD_IE": "-12.14509", "LONGITUD_IE": "-76.98359", "DOCENTES": "12", "x": -76.98359, "y": -12.14509}, {"fid": "183", "NOMB_IE": "56 NUESTRA SEÑORA MARIA AUXILIADORA", "LATITUD_IE": "-12.07378", "LONGITUD_IE": "-77.0065", "DOCENTES": "14", "x": -77.0065, "y": -12.07378}, {"fid": "184", "NOMB_IE": "58 ARCO IRIS", "LATITUD_IE": "-12.06913", "LONGITUD_IE": "-77.07549", "DOCENTES": "11", "x": -77.07549, "y": -12.06913}, {"fid": "185", "NOMB_IE": "59 ANDRES BELLO", "LATITUD_IE": "-12.08003", "LONGITUD_IE": "-77.07507", "DOCENTES": "16", "x": -77.07507, "y": -12.08003}, {"fid": "186", "NOMB_IE": "59 SANTA LUCIA", "LATITUD_IE": "-12.16549", "LONGITUD_IE": "-77.02537", "DOCENTES": "24", "x": -77.02537, "y": -12.16549}, {"fid": "187", "NOMB_IE": "6003 REBECA CARRION CACHOT", "LATITUD_IE": "-12.11477", "LONGITUD_IE": "-77.04408", "DOCENTES": "11", "x": -77.04408, "y": -12.11477}, {"fid": "188", "NOMB_IE": "6005 GENERAL EMILIO SOYER CABERO", "LATITUD_IE": "-12.16355", "LONGITUD_IE": "-77.02045", "DOCENTES": "34", "x": -77.02045, "y": -12.16355}, {"fid": "189", "NOMB_IE": "6039 FERNANDO CARBAJAL SEGURA", "LATITUD_IE": "-12.08358", "LONGITUD_IE": "-76.98193", "DOCENTES": "36", "x": -76.98193, "y": -12.08358}, {"fid": "190", "NOMB_IE": "6043 PEDRO VENTURO", "LATITUD_IE": "-12.12421", "LONGITUD_IE": "-76.99059", "DOCENTES": "27", "x": -76.99059, "y": -12.12421}, {"fid": "191", "NOMB_IE": "6044 JORGE CHAVEZ", "LATITUD_IE": "-12.14332", "LONGITUD_IE": "-77.00457", "DOCENTES": "68", "x": -77.00457, "y": -12.14332}, {"fid": "192", "NOMB_IE": "6049 RICARDO PALMA", "LATITUD_IE": "-12.11269", "LONGITUD_IE": "-77.01598", "DOCENTES": "106", "x": -77.01598, "y": -12.11269}, {"fid": "193", "NOMB_IE": "6050 JUANA ALARCO DE DAMMERT", "LATITUD_IE": "-12.12709", "LONGITUD_IE": "-77.00859", "DOCENTES": "164", "x": -77.00859, "y": -12.12709}, {"fid": "194", "NOMB_IE": "6051 MERCEDES INDACOCHEA", "LATITUD_IE": "-12.15446", "LONGITUD_IE": "-77.01962", "DOCENTES": "86", "x": -77.01962, "y": -12.15446}, {"fid": "195", "NOMB_IE": "6052 JOSE MARIA EGUREN", "LATITUD_IE": "-12.15164", "LONGITUD_IE": "-77.01797", "DOCENTES": "88", "x": -77.01797, "y": -12.15164}, {"fid": "196", "NOMB_IE": "6053 SAGRADO CORAZON", "LATITUD_IE": "-12.1609", "LONGITUD_IE": "-77.02362", "DOCENTES": "34", "x": -77.02362, "y": -12.1609}, {"fid": "197", "NOMB_IE": "6079 SANTISIMA NIÑA MARIA", "LATITUD_IE": "-12.10509", "LONGITUD_IE": "-76.99374", "DOCENTES": "26", "x": -76.99374, "y": -12.10509}, {"fid": "198", "NOMB_IE": "6085 BRIGIDA SILVA DE OCHOA", "LATITUD_IE": "-12.164653", "LONGITUD_IE": "-77.020892", "DOCENTES": "79", "x": -77.020892, "y": -12.164653}, {"fid": "199", "NOMB_IE": "6087 PABLO MARIA GUZMAN", "LATITUD_IE": "-12.09525", "LONGITUD_IE": "-76.96393", "DOCENTES": "22", "x": -76.96393, "y": -12.09525}, {"fid": "200", "NOMB_IE": "7001 ANDRES BELLO", "LATITUD_IE": "-12.11407", "LONGITUD_IE": "-77.02716", "DOCENTES": "13", "x": -77.02716, "y": -12.11407}, {"fid": "201", "NOMB_IE": "7003 MANUEL FERNANDO BONILLA", "LATITUD_IE": "-12.12001", "LONGITUD_IE": "-77.02614", "DOCENTES": "12", "x": -77.02614, "y": -12.12001}, {"fid": "202", "NOMB_IE": "7008 SCIPION E. LLONA", "LATITUD_IE": "-12.11748", "LONGITUD_IE": "-77.04146", "DOCENTES": "49", "x": -77.04146, "y": -12.11748}, {"fid": "203", "NOMB_IE": "7008 SCIPION LLONA", "LATITUD_IE": "-12.11748", "LONGITUD_IE": "-77.04146", "DOCENTES": "2", "x": -77.04146, "y": -12.11748}, {"fid": "204", "NOMB_IE": "7012 JESUS DE LA MISERICORDIA", "LATITUD_IE": "-12.11261", "LONGITUD_IE": "-77.0222", "DOCENTES": "13", "x": -77.0222, "y": -12.11261}, {"fid": "205", "NOMB_IE": "7014 VASIL LEVSKI", "LATITUD_IE": "-12.12184", "LONGITUD_IE": "-77.00317", "DOCENTES": "35", "x": -77.00317, "y": -12.12184}, {"fid": "206", "NOMB_IE": "7022 ALBERTH EINSTEIN", "LATITUD_IE": "-12.11506", "LONGITUD_IE": "-77.00569", "DOCENTES": "28", "x": -77.00569, "y": -12.11506}, {"fid": "207", "NOMB_IE": "7024 SAN LORENZO", "LATITUD_IE": "-12.11112", "LONGITUD_IE": "-77.01709", "DOCENTES": "15", "x": -77.01709, "y": -12.11112}, {"fid": "208", "NOMB_IE": "7027 NUESTRA SEÑORA DE LA ALEGRIA", "LATITUD_IE": "-12.1164", "LONGITUD_IE": "-77.02383", "DOCENTES": "15", "x": -77.02383, "y": -12.1164}, {"fid": "209", "NOMB_IE": "7028 MARCO ANTONIO SCHENONE OLIVA", "LATITUD_IE": "-12.11528", "LONGITUD_IE": "-77.01486", "DOCENTES": "16", "x": -77.01486, "y": -12.11528}, {"fid": "210", "NOMB_IE": "7029 VIRGEN MILAGROSA", "LATITUD_IE": "-12.110165", "LONGITUD_IE": "-77.008852", "DOCENTES": "18", "x": -77.008852, "y": -12.110165}, {"fid": "211", "NOMB_IE": "7031 REYNA DE LA FAMILIA", "LATITUD_IE": "-12.10955", "LONGITUD_IE": "-77.01136", "DOCENTES": "13", "x": -77.01136, "y": -12.10955}, {"fid": "212", "NOMB_IE": "7032 VIRGEN DEL PILAR", "LATITUD_IE": "-12.13669", "LONGITUD_IE": "-77.02151", "DOCENTES": "13", "x": -77.02151, "y": -12.13669}, {"fid": "213", "NOMB_IE": "7034 ENRIQUE NERINI COLLAZOS", "LATITUD_IE": "-12.17172", "LONGITUD_IE": "-77.024447", "DOCENTES": "33", "x": -77.024447, "y": -12.17172}, {"fid": "214", "NOMB_IE": "7036 ANGELICA RECHARTE CORRALES", "LATITUD_IE": "-12.16583", "LONGITUD_IE": "-77.02445", "DOCENTES": "32", "x": -77.02445, "y": -12.16583}, {"fid": "215", "NOMB_IE": "7038 CORAZON DE JESUS DE ARMATAMBO", "LATITUD_IE": "-12.1789", "LONGITUD_IE": "-77.02239", "DOCENTES": "38", "x": -77.02239, "y": -12.1789}, {"fid": "216", "NOMB_IE": "7043 CORAZON DE JESUS", "LATITUD_IE": "-12.15088", "LONGITUD_IE": "-77.02126", "DOCENTES": "13", "x": -77.02126, "y": -12.15088}, {"fid": "217", "NOMB_IE": "7044 SAN MARTIN DE PORRES", "LATITUD_IE": "-12.17302", "LONGITUD_IE": "-77.02318", "DOCENTES": "27", "x": -77.02318, "y": -12.17302}, {"fid": "218", "NOMB_IE": "7047", "LATITUD_IE": "-12.14433", "LONGITUD_IE": "-77.01804", "DOCENTES": "1", "x": -77.01804, "y": -12.14433}, {"fid": "219", "NOMB_IE": "7047 TACNA", "LATITUD_IE": "-12.14433", "LONGITUD_IE": "-77.01804", "DOCENTES": "65", "x": -77.01804, "y": -12.14433}, {"fid": "220", "NOMB_IE": "7048 MANUEL MONTERO BERNALES", "LATITUD_IE": "-12.14335", "LONGITUD_IE": "-77.019", "DOCENTES": "14", "x": -77.019, "y": -12.14335}, {"fid": "221", "NOMB_IE": "7049 CAP. FAP JOSE A. QUIÑONES GONZALES", "LATITUD_IE": "-12.14456", "LONGITUD_IE": "-77.01443", "DOCENTES": "20", "x": -77.01443, "y": -12.14456}, {"fid": "222", "NOMB_IE": "7050 NICANOR RIVERA CACERES", "LATITUD_IE": "-12.14295", "LONGITUD_IE": "-77.02031", "DOCENTES": "61", "x": -77.02031, "y": -12.14295}, {"fid": "223", "NOMB_IE": "7052 MARIA INMACULADA", "LATITUD_IE": "-12.16532", "LONGITUD_IE": "-77.02388", "DOCENTES": "20", "x": -77.02388, "y": -12.16532}, {"fid": "224", "NOMB_IE": "7053 REINO DE ESPAÑA", "LATITUD_IE": "-12.145928", "LONGITUD_IE": "-77.022812", "DOCENTES": "31", "x": -77.022812, "y": -12.145928}, {"fid": "225", "NOMB_IE": "7058 MARIA DE FATIMA", "LATITUD_IE": "-12.14506", "LONGITUD_IE": "-77.00426", "DOCENTES": "23", "x": -77.00426, "y": -12.14506}, {"fid": "226", "NOMB_IE": "7065 JOSE ANTONIO ENCINAS FRANCO", "LATITUD_IE": "-12.14689", "LONGITUD_IE": "-77.0078", "DOCENTES": "1", "x": -77.0078, "y": -12.14689}, {"fid": "227", "NOMB_IE": "7068 ABRAHAM ROLDAN POMA", "LATITUD_IE": "-12.14689", "LONGITUD_IE": "-77.0078", "DOCENTES": "9", "x": -77.0078, "y": -12.14689}, {"fid": "228", "NOMB_IE": "7068 ABRAHAM ROLDAN POMA", "LATITUD_IE": "-12.14561", "LONGITUD_IE": "-77.0061", "DOCENTES": "22", "x": -77.0061, "y": -12.14561}, {"fid": "229", "NOMB_IE": "707 LAS PALOMITAS", "LATITUD_IE": "-12.06295", "LONGITUD_IE": "-77.07561", "DOCENTES": "18", "x": -77.07561, "y": -12.06295}, {"fid": "230", "NOMB_IE": "7083 MANUEL GONZALES PRADA", "LATITUD_IE": "-12.08618", "LONGITUD_IE": "-77.00652", "DOCENTES": "22", "x": -77.00652, "y": -12.08618}, {"fid": "231", "NOMB_IE": "7083 MANUEL GONZALES PRADA", "LATITUD_IE": "-12.08564", "LONGITUD_IE": "-77.00184", "DOCENTES": "35", "x": -77.00184, "y": -12.08564}, {"fid": "232", "NOMB_IE": "7087 SANTIAGO DE SURCO", "LATITUD_IE": "-12.143777", "LONGITUD_IE": "-76.983364", "DOCENTES": "11", "x": -76.983364, "y": -12.143777}, {"fid": "233", "NOMB_IE": "7089 ROMEO LUNA VICTORIA", "LATITUD_IE": "-12.10594", "LONGITUD_IE": "-77.00472", "DOCENTES": "69", "x": -77.00472, "y": -12.10594}, {"fid": "234", "NOMB_IE": "7701 NUESTRA SEÑORA DEL CARMEN", "LATITUD_IE": "-12.13517", "LONGITUD_IE": "-77.02079", "DOCENTES": "9", "x": -77.02079, "y": -12.13517}, {"fid": "235", "NOMB_IE": "7707 CRISTO REY", "LATITUD_IE": "-12.16906", "LONGITUD_IE": "-77.02996", "DOCENTES": "8", "x": -77.02996, "y": -12.16906}, {"fid": "236", "NOMB_IE": "79 VIRGEN DEL CARMEN", "LATITUD_IE": "-12.10967", "LONGITUD_IE": "-77.01338", "DOCENTES": "14", "x": -77.01338, "y": -12.10967}, {"fid": "237", "NOMB_IE": "86 VIRGENCITA DEL CARMEN", "LATITUD_IE": "-12.14468", "LONGITUD_IE": "-77.00405", "DOCENTES": "9", "x": -77.00405, "y": -12.14468}, {"fid": "238", "NOMB_IE": "8VA DIVISION DE INFANTERIA", "LATITUD_IE": "-12.07197", "LONGITUD_IE": "-77.03174", "DOCENTES": "1", "x": -77.03174, "y": -12.07197}, {"fid": "239", "NOMB_IE": "ALMIRANTE MIGUEL GRAU", "LATITUD_IE": "-12.05383", "LONGITUD_IE": "-77.08222", "DOCENTES": "21", "x": -77.08222, "y": -12.05383}, {"fid": "240", "NOMB_IE": "ANDGHGHG", "LATITUD_IE": "-12.1485174", "LONGITUD_IE": "-76.9830114", "DOCENTES": "11", "x": -76.9830114, "y": -12.1485174}, {"fid": "241", "NOMB_IE": "ANGELICA PALMA ROMAN", "LATITUD_IE": "-12.07477", "LONGITUD_IE": "-77.0191", "DOCENTES": "23", "x": -77.0191, "y": -12.07477}, {"fid": "242", "NOMB_IE": "ANGELICA RECHARTE", "LATITUD_IE": "-12.08782", "LONGITUD_IE": "-77.07268", "DOCENTES": "3", "x": -77.07268, "y": -12.08782}, {"fid": "243", "NOMB_IE": "ANGELICA RECHARTE CORRALES", "LATITUD_IE": "-12.16583", "LONGITUD_IE": "-77.02445", "DOCENTES": "1", "x": -77.02445, "y": -12.16583}, {"fid": "244", "NOMB_IE": "ARGENTINA", "LATITUD_IE": "-12.0519", "LONGITUD_IE": "-77.04201", "DOCENTES": "166", "x": -77.04201, "y": -12.0519}, {"fid": "245", "NOMB_IE": "ARTURO SABROSO MONTOYA", "LATITUD_IE": "-12.0597", "LONGITUD_IE": "-77.0196", "DOCENTES": "18", "x": -77.0196, "y": -12.0597}, {"fid": "246", "NOMB_IE": "BARTOLOME HERRERA", "LATITUD_IE": "-12.080887", "LONGITUD_IE": "-77.074082", "DOCENTES": "68", "x": -77.074082, "y": -12.080887}, {"fid": "247", "NOMB_IE": "BEATRIZ CISNEROS", "LATITUD_IE": "-12.05687", "LONGITUD_IE": "-77.05347", "DOCENTES": "18", "x": -77.05347, "y": -12.05687}, {"fid": "248", "NOMB_IE": "BELLAS ARTES DEL PERU", "LATITUD_IE": "-12.04708", "LONGITUD_IE": "-77.02385", "DOCENTES": "2", "x": -77.02385, "y": -12.04708}, {"fid": "249", "NOMB_IE": "BENJAMIN BLOOM", "LATITUD_IE": "-12.17363", "LONGITUD_IE": "-77.0056", "DOCENTES": "11", "x": -77.0056, "y": -12.17363}, {"fid": "250", "NOMB_IE": "CAPITAN FAP JOSE ABELARDO QUIÑONES", "LATITUD_IE": "-12.06783", "LONGITUD_IE": "-76.97001", "DOCENTES": "2", "x": -76.97001, "y": -12.06783}, {"fid": "251", "NOMB_IE": "CARLOS CUETO FERNANDINI", "LATITUD_IE": "-12.14492", "LONGITUD_IE": "-77.01907", "DOCENTES": "8", "x": -77.01907, "y": -12.14492}, {"fid": "252", "NOMB_IE": "CENTRO DE RECURSOS PEDAGOGICOS", "LATITUD_IE": "-12.105728", "LONGITUD_IE": "-77.042303", "DOCENTES": "5", "x": -77.042303, "y": -12.105728}, {"fid": "253", "NOMB_IE": "CENTRO FOLKLORICO DEL MAGISTERIO ALEJANDRO VIVANCO GUERRA", "LATITUD_IE": "-12.0521", "LONGITUD_IE": "-77.04592", "DOCENTES": "11", "x": -77.04592, "y": -12.0521}, {"fid": "254", "NOMB_IE": "CENTRO PILOTO DE RECUPERACION PEDAGOGICA", "LATITUD_IE": "-12.05405", "LONGITUD_IE": "-77.07268", "DOCENTES": "11", "x": -77.07268, "y": -12.05405}, {"fid": "255", "NOMB_IE": "CERCIL", "LATITUD_IE": "-12.13331", "LONGITUD_IE": "-76.98224", "DOCENTES": "2", "x": -76.98224, "y": -12.13331}, {"fid": "256", "NOMB_IE": "CESAR A. VALLEJO", "LATITUD_IE": "-12.06814", "LONGITUD_IE": "-77.00651", "DOCENTES": "86", "x": -77.00651, "y": -12.06814}, {"fid": "257", "NOMB_IE": "COLEGIO PARROQUIAL SANTA ROSA", "LATITUD_IE": "-12.14121", "LONGITUD_IE": "-77.02453", "DOCENTES": "8", "x": -77.02453, "y": -12.14121}, {"fid": "258", "NOMB_IE": "COMAIN", "LATITUD_IE": "-12.04295229", "LONGITUD_IE": "-77.03417089", "DOCENTES": "1", "x": -77.03417089, "y": -12.04295229}, {"fid": "259", "NOMB_IE": "COMANDANTE FAP OSCAR OVIDIO MUÑOZ GALLARDO", "LATITUD_IE": "-12.12074", "LONGITUD_IE": "-76.98834", "DOCENTES": "1", "x": -76.98834, "y": -12.12074}, {"fid": "260", "NOMB_IE": "COMUNIDAD SHIPIBA", "LATITUD_IE": "-12.04069", "LONGITUD_IE": "-77.01663", "DOCENTES": "5", "x": -77.01663, "y": -12.04069}, {"fid": "261", "NOMB_IE": "CONSERVATORIO NACIONAL DE MUSICA", "LATITUD_IE": "-12.04809", "LONGITUD_IE": "-77.03128", "DOCENTES": "20", "x": -77.03128, "y": -12.04809}, {"fid": "262", "NOMB_IE": "CORAZON DE DIOS", "LATITUD_IE": "-12.06945", "LONGITUD_IE": "-76.97924", "DOCENTES": "4", "x": -76.97924, "y": -12.06945}, {"fid": "263", "NOMB_IE": "CORCOVADO", "LATITUD_IE": "-12.048095", "LONGITUD_IE": "-77.036974", "DOCENTES": "24", "x": -77.036974, "y": -12.048095}, {"fid": "264", "NOMB_IE": "CORONEL JOSE JOAQUIN INCLAN", "LATITUD_IE": "-12.17147", "LONGITUD_IE": "-77.01034", "DOCENTES": "20", "x": -77.01034, "y": -12.17147}, {"fid": "265", "NOMB_IE": "CPAL FERNANDO WIESE ESLAVA", "LATITUD_IE": "-12.11332", "LONGITUD_IE": "-76.97532", "DOCENTES": "10", "x": -76.97532, "y": -12.11332}, {"fid": "266", "NOMB_IE": "CRISTO DE LA PAZ", "LATITUD_IE": "-12.08815", "LONGITUD_IE": "-77.088", "DOCENTES": "13", "x": -77.088, "y": -12.08815}, {"fid": "267", "NOMB_IE": "CRISTO JOVEN", "LATITUD_IE": "-12.08324", "LONGITUD_IE": "-77.09881", "DOCENTES": "18", "x": -77.09881, "y": -12.08324}, {"fid": "268", "NOMB_IE": "CRISTO JOVEN", "LATITUD_IE": "-12.08287631", "LONGITUD_IE": "-77.09948395", "DOCENTES": "2", "x": -77.09948395, "y": -12.08287631}, {"fid": "269", "NOMB_IE": "DEPORTIVO EXPERIMENTAL JULIA SANCHEZ DEZA", "LATITUD_IE": "-12.06246", "LONGITUD_IE": "-77.02497", "DOCENTES": "10", "x": -77.02497, "y": -12.06246}, {"fid": "270", "NOMB_IE": "DIEGO FERRE", "LATITUD_IE": "-12.06974", "LONGITUD_IE": "-77.04654", "DOCENTES": "18", "x": -77.04654, "y": -12.06974}, {"fid": "271", "NOMB_IE": "DISEÑO Y COMUNICACION", "LATITUD_IE": "-12.0536", "LONGITUD_IE": "-77.0405", "DOCENTES": "16", "x": -77.0405, "y": -12.0536}, {"fid": "272", "NOMB_IE": "DOMINGUITO SAVIO MINSA", "LATITUD_IE": "-12.07161", "LONGITUD_IE": "-77.03936", "DOCENTES": "1", "x": -77.03936, "y": -12.07161}, {"fid": "273", "NOMB_IE": "DRE LIMA METROPOLITANA", "LATITUD_IE": "-12.084946", "LONGITUD_IE": "-77.021421", "DOCENTES": "131", "x": -77.021421, "y": -12.084946}, {"fid": "274", "NOMB_IE": "EL CARMELO", "LATITUD_IE": "-12.07549", "LONGITUD_IE": "-77.06044", "DOCENTES": "5", "x": -77.06044, "y": -12.07549}, {"fid": "275", "NOMB_IE": "EL PORVENIR", "LATITUD_IE": "-12.07121", "LONGITUD_IE": "-77.02515", "DOCENTES": "17", "x": -77.02515, "y": -12.07121}, {"fid": "276", "NOMB_IE": "EMILIA BARCIA BONIFFATTI", "LATITUD_IE": "-12.05721", "LONGITUD_IE": "-77.07199", "DOCENTES": "10", "x": -77.07199, "y": -12.05721}, {"fid": "277", "NOMB_IE": "ENRIQUE ARNAEZ NAVEDA", "LATITUD_IE": "-12.14908", "LONGITUD_IE": "-77.01884", "DOCENTES": "15", "x": -77.01884, "y": -12.14908}, {"fid": "278", "NOMB_IE": "ESPECIAL 4", "LATITUD_IE": "-12.12626", "LONGITUD_IE": "-77.00365", "DOCENTES": "17", "x": -77.00365, "y": -12.12626}, {"fid": "279", "NOMB_IE": "ESPECIAL SURCO", "LATITUD_IE": "-12.13823", "LONGITUD_IE": "-76.98961", "DOCENTES": "17", "x": -76.98961, "y": -12.13823}, {"fid": "280", "NOMB_IE": "ESPECIAL SURQUILLO", "LATITUD_IE": "-12.11452", "LONGITUD_IE": "-77.00075", "DOCENTES": "15", "x": -77.00075, "y": -12.11452}, {"fid": "281", "NOMB_IE": "FEDERICO VILLARREAL", "LATITUD_IE": "-12.12498", "LONGITUD_IE": "-77.00461", "DOCENTES": "36", "x": -77.00461, "y": -12.12498}, {"fid": "282", "NOMB_IE": "FRANCISCO GARCIA CALDERON", "LATITUD_IE": "-12.0795", "LONGITUD_IE": "-77.06338", "DOCENTES": "13", "x": -77.06338, "y": -12.0795}, {"fid": "283", "NOMB_IE": "GABRIELA MISTRAL", "LATITUD_IE": "-12.08167", "LONGITUD_IE": "-77.05597", "DOCENTES": "30", "x": -77.05597, "y": -12.08167}, {"fid": "284", "NOMB_IE": "GENERAL FELIPE SANTIAGO SALAVERRY", "LATITUD_IE": "-12.06739", "LONGITUD_IE": "-77.02131", "DOCENTES": "12", "x": -77.02131, "y": -12.06739}, {"fid": "285", "NOMB_IE": "GOTITAS DE AMOR", "LATITUD_IE": "-12.06263", "LONGITUD_IE": "-77.02429", "DOCENTES": "4", "x": -77.02429, "y": -12.06263}, {"fid": "286", "NOMB_IE": "GRATUITO SAN JOSE", "LATITUD_IE": "-12.08472", "LONGITUD_IE": "-77.09036", "DOCENTES": "16", "x": -77.09036, "y": -12.08472}, {"fid": "287", "NOMB_IE": "HERMANO NOE ZEVALLOS ORTEGA", "LATITUD_IE": "-12.05864", "LONGITUD_IE": "-77.04753", "DOCENTES": "5", "x": -77.04753, "y": -12.05864}, {"fid": "288", "NOMB_IE": "HERMASIA PAGET", "LATITUD_IE": "-12.06964", "LONGITUD_IE": "-77.0313", "DOCENTES": "6", "x": -77.0313, "y": -12.06964}, {"fid": "289", "NOMB_IE": "HOGAR DE NAZARETH", "LATITUD_IE": "-12.05942", "LONGITUD_IE": "-77.0721", "DOCENTES": "1", "x": -77.0721, "y": -12.05942}, {"fid": "290", "NOMB_IE": "HOGAR DEL NIÑO SANTA MARIA MADRE DE DIOS", "LATITUD_IE": "-12.08118", "LONGITUD_IE": "-77.10003", "DOCENTES": "7", "x": -77.10003, "y": -12.08118}, {"fid": "291", "NOMB_IE": "INEI", "LATITUD_IE": "-12.06666197", "LONGITUD_IE": "-77.04517702", "DOCENTES": "1", "x": -77.04517702, "y": -12.06666197}, {"fid": "292", "NOMB_IE": "INEN", "LATITUD_IE": "-12.11187", "LONGITUD_IE": "-76.99832", "DOCENTES": "6", "x": -76.99832, "y": -12.11187}, {"fid": "293", "NOMB_IE": "INSTITUTO PARA NIÑOS EXCEPCIONALES", "LATITUD_IE": "-12.1109", "LONGITUD_IE": "-76.99174", "DOCENTES": "11", "x": -76.99174, "y": -12.1109}, {"fid": "294", "NOMB_IE": "ISABEL LA CATOLICA", "LATITUD_IE": "-12.06977", "LONGITUD_IE": "-77.02396", "DOCENTES": "99", "x": -77.02396, "y": -12.06977}, {"fid": "295", "NOMB_IE": "JARDIN DE LA INFANCIA N 1 DE LIMA", "LATITUD_IE": "-12.08224", "LONGITUD_IE": "-77.08685", "DOCENTES": "15", "x": -77.08685, "y": -12.08224}, {"fid": "296", "NOMB_IE": "JESUS ES AMOR", "LATITUD_IE": "-12.13264", "LONGITUD_IE": "-76.98701", "DOCENTES": "3", "x": -76.98701, "y": -12.13264}, {"fid": "297", "NOMB_IE": "JESUS REPARADOR", "LATITUD_IE": "-12.053", "LONGITUD_IE": "-77.02635", "DOCENTES": "10", "x": -77.02635, "y": -12.053}, {"fid": "298", "NOMB_IE": "JOSE DE LA RIVA AGUERO Y OSMA", "LATITUD_IE": "-12.16639", "LONGITUD_IE": "-77.0215", "DOCENTES": "20", "x": -77.0215, "y": -12.16639}, {"fid": "299", "NOMB_IE": "JOSE OLAYA", "LATITUD_IE": "-12.16805", "LONGITUD_IE": "-77.02647", "DOCENTES": "4", "x": -77.02647, "y": -12.16805}, {"fid": "300", "NOMB_IE": "JOSE PARDO", "LATITUD_IE": "-12.0592", "LONGITUD_IE": "-77.0261", "DOCENTES": "57", "x": -77.0261, "y": -12.0592}, {"fid": "301", "NOMB_IE": "JOSE SANTOS CHOCANO", "LATITUD_IE": "-12.08037", "LONGITUD_IE": "-77.06285", "DOCENTES": "15", "x": -77.06285, "y": -12.08037}, {"fid": "302", "NOMB_IE": "JUAN PABLO VIZCARDO Y GUZMAN", "LATITUD_IE": "-12.041475", "LONGITUD_IE": "-77.065068", "DOCENTES": "64", "x": -77.065068, "y": -12.041475}, {"fid": "303", "NOMB_IE": "JUGANDO PARA CRECER", "LATITUD_IE": "-12.11402", "LONGITUD_IE": "-77.03281", "DOCENTES": "11", "x": -77.03281, "y": -12.11402}, {"fid": "304", "NOMB_IE": "JULIO CESAR TELLO", "LATITUD_IE": "-12.11601", "LONGITUD_IE": "-77.02459", "DOCENTES": "1", "x": -77.02459, "y": -12.11601}, {"fid": "305", "NOMB_IE": "LA CASA DEL NIÑO TRABAJADOR SAN MARTIN DE PORRES", "LATITUD_IE": "-12.052", "LONGITUD_IE": "-77.03087", "DOCENTES": "4", "x": -77.03087, "y": -12.052}, {"fid": "306", "NOMB_IE": "LA DIVINA PROVIDENCIA", "LATITUD_IE": "-12.11229", "LONGITUD_IE": "-77.00615", "DOCENTES": "36", "x": -77.00615, "y": -12.11229}, {"fid": "307", "NOMB_IE": "LA ESPERANZA", "LATITUD_IE": "-12.15546", "LONGITUD_IE": "-77.01873", "DOCENTES": "4", "x": -77.01873, "y": -12.15546}, {"fid": "308", "NOMB_IE": "LA MEDALLA MILAGROSA", "LATITUD_IE": "-12.05491", "LONGITUD_IE": "-77.01604", "DOCENTES": "4", "x": -77.01604, "y": -12.05491}, {"fid": "309", "NOMB_IE": "LIBERTADOR SAN MARTIN", "LATITUD_IE": "-12.10039", "LONGITUD_IE": "-77.00154", "DOCENTES": "1", "x": -77.00154, "y": -12.10039}, {"fid": "310", "NOMB_IE": "LICEO NAVAL ALMIRANTE GUISE", "LATITUD_IE": "-12.09672", "LONGITUD_IE": "-76.9997", "DOCENTES": "2", "x": -76.9997, "y": -12.09672}, {"fid": "311", "NOMB_IE": "LICEO NAVAL CONTRALMIRANTE MONTERO", "LATITUD_IE": "-12.06211", "LONGITUD_IE": "-77.08853", "DOCENTES": "2", "x": -77.08853, "y": -12.06211}, {"fid": "312", "NOMB_IE": "LOS EDUCADORES", "LATITUD_IE": "-12.0777", "LONGITUD_IE": "-76.99827", "DOCENTES": "47", "x": -76.99827, "y": -12.0777}, {"fid": "313", "NOMB_IE": "LUDWIG VAN BEETHOVEN", "LATITUD_IE": "-12.054781", "LONGITUD_IE": "-77.076224", "DOCENTES": "11", "x": -77.076224, "y": -12.054781}, {"fid": "314", "NOMB_IE": "LUZ CASANOVA", "LATITUD_IE": "-12.06027", "LONGITUD_IE": "-77.05694", "DOCENTES": "7", "x": -77.05694, "y": -12.06027}, {"fid": "315", "NOMB_IE": "MADRE TERESA", "LATITUD_IE": "-12.17359", "LONGITUD_IE": "-77.01571", "DOCENTES": "3", "x": -77.01571, "y": -12.17359}, {"fid": "316", "NOMB_IE": "MAGDALENA", "LATITUD_IE": "-12.09201", "LONGITUD_IE": "-77.07284", "DOCENTES": "35", "x": -77.07284, "y": -12.09201}, {"fid": "317", "NOMB_IE": "MANUELA FELICIA GOMEZ", "LATITUD_IE": "-12.06365", "LONGITUD_IE": "-77.02346", "DOCENTES": "21", "x": -77.02346, "y": -12.06365}, {"fid": "318", "NOMB_IE": "MARIA AUXILIADORA", "LATITUD_IE": "-12.10625", "LONGITUD_IE": "-77.00392", "DOCENTES": "13", "x": -77.00392, "y": -12.10625}, {"fid": "319", "NOMB_IE": "MARIA AUXILIADORA", "LATITUD_IE": "-12.06317", "LONGITUD_IE": "-77.04454", "DOCENTES": "11", "x": -77.04454, "y": -12.06317}, {"fid": "320", "NOMB_IE": "MARIA AUXILIADORA", "LATITUD_IE": "-12.06274", "LONGITUD_IE": "-77.04491", "DOCENTES": "4", "x": -77.04491, "y": -12.06274}, {"fid": "321", "NOMB_IE": "MARIA AUXILIADORA", "LATITUD_IE": "-12.04671", "LONGITUD_IE": "-77.01373", "DOCENTES": "5", "x": -77.01373, "y": -12.04671}, {"fid": "322", "NOMB_IE": "MARIA DE LA PROVIDENCIA", "LATITUD_IE": "-12.06029", "LONGITUD_IE": "-77.05591", "DOCENTES": "2", "x": -77.05591, "y": -12.06029}, {"fid": "323", "NOMB_IE": "MARIA DEL CARMEN", "LATITUD_IE": "-12.06466", "LONGITUD_IE": "-77.01014", "DOCENTES": "3", "x": -77.01014, "y": -12.06466}, {"fid": "324", "NOMB_IE": "MARIA INMACULADA", "LATITUD_IE": "-12.10579", "LONGITUD_IE": "-76.9735", "DOCENTES": "8", "x": -76.9735, "y": -12.10579}, {"fid": "325", "NOMB_IE": "MARIA PARADO DE BELLIDO", "LATITUD_IE": "-12.1719", "LONGITUD_IE": "-77.0212", "DOCENTES": "3", "x": -77.0212, "y": -12.1719}, {"fid": "326", "NOMB_IE": "MARIA ROSARIO ARAOZ PINTO", "LATITUD_IE": "-12.0725", "LONGITUD_IE": "-77.1028", "DOCENTES": "59", "x": -77.1028, "y": -12.0725}, {"fid": "327", "NOMB_IE": "MARIANO MELGAR", "LATITUD_IE": "-12.0599", "LONGITUD_IE": "-77.05371", "DOCENTES": "89", "x": -77.05371, "y": -12.0599}, {"fid": "328", "NOMB_IE": "MICAELA BASTIDAS", "LATITUD_IE": "-12.06162", "LONGITUD_IE": "-77.05248", "DOCENTES": "20", "x": -77.05248, "y": -12.06162}, {"fid": "329", "NOMB_IE": "MIGUEL GRAU", "LATITUD_IE": "-12.0895", "LONGITUD_IE": "-77.06857", "DOCENTES": "74", "x": -77.06857, "y": -12.0895}, {"fid": "330", "NOMB_IE": "MINEDU", "LATITUD_IE": "-12.085037", "LONGITUD_IE": "-77.000707", "DOCENTES": "16", "x": -77.000707, "y": -12.085037}, {"fid": "331", "NOMB_IE": "MONSEÑOR MARCOS LIBARDONI", "LATITUD_IE": "-12.0716", "LONGITUD_IE": "-77.00943", "DOCENTES": "5", "x": -77.00943, "y": -12.0716}, {"fid": "332", "NOMB_IE": "MONTERRICO", "LATITUD_IE": "-12.12304", "LONGITUD_IE": "-76.97747", "DOCENTES": "42", "x": -76.97747, "y": -12.12304}, {"fid": "333", "NOMB_IE": "MONTERRICO INSTITUCION EDUCATIVA APLICACION", "LATITUD_IE": "-12.12304", "LONGITUD_IE": "-76.97747", "DOCENTES": "2", "x": -76.97747, "y": -12.12304}, {"fid": "334", "NOMB_IE": "MUNICIPAL DE CHORRILLOS", "LATITUD_IE": "-12.17498", "LONGITUD_IE": "-77.01692", "DOCENTES": "7", "x": -77.01692, "y": -12.17498}, {"fid": "335", "NOMB_IE": "MUNICIPAL SANTA CRUZ MIRAFLORES", "LATITUD_IE": "-12.1112", "LONGITUD_IE": "-77.04949", "DOCENTES": "14", "x": -77.04949, "y": -12.1112}, {"fid": "336", "NOMB_IE": "NACIONAL DE BALLET", "LATITUD_IE": "-12.1151", "LONGITUD_IE": "-77.0003", "DOCENTES": "3", "x": -77.0003, "y": -12.1151}, {"fid": "337", "NOMB_IE": "NACIONES UNIDAS", "LATITUD_IE": "-12.0799", "LONGITUD_IE": "-77.0754", "DOCENTES": "16", "x": -77.0754, "y": -12.0799}, {"fid": "338", "NOMB_IE": "NAZARETH", "LATITUD_IE": "-12.16639", "LONGITUD_IE": "-77.02148", "DOCENTES": "1", "x": -77.02148, "y": -12.16639}, {"fid": "339", "NOMB_IE": "NICOLAS DE PIEROLA", "LATITUD_IE": "-12.05079", "LONGITUD_IE": "-77.0107", "DOCENTES": "10", "x": -77.0107, "y": -12.05079}, {"fid": "340", "NOMB_IE": "NIÑITA MARIA", "LATITUD_IE": "-12.07504", "LONGITUD_IE": "-76.97937", "DOCENTES": "1", "x": -76.97937, "y": -12.07504}, {"fid": "341", "NOMB_IE": "NIÑO JESUS DE PRAGA", "LATITUD_IE": "-12.16748", "LONGITUD_IE": "-77.02466", "DOCENTES": "7", "x": -77.02466, "y": -12.16748}, {"fid": "342", "NOMB_IE": "NIÑO JESUS DE PRAGA", "LATITUD_IE": "-12.04609", "LONGITUD_IE": "-77.01147", "DOCENTES": "11", "x": -77.01147, "y": -12.04609}, {"fid": "343", "NOMB_IE": "NUESTRA SEÑORA DE COCHARCAS", "LATITUD_IE": "-12.05531", "LONGITUD_IE": "-77.01851", "DOCENTES": "9", "x": -77.01851, "y": -12.05531}, {"fid": "344", "NOMB_IE": "NUESTRA SEÑORA DE GUADALUPE", "LATITUD_IE": "-12.06949", "LONGITUD_IE": "-77.01638", "DOCENTES": "12", "x": -77.01638, "y": -12.06949}, {"fid": "345", "NOMB_IE": "NUESTRA SEÑORA DE GUADALUPE", "LATITUD_IE": "-12.05502", "LONGITUD_IE": "-77.04175", "DOCENTES": "95", "x": -77.04175, "y": -12.05502}, {"fid": "346", "NOMB_IE": "NUESTRA SEÑORA DE LA ESPERANZA", "LATITUD_IE": "-12.07297", "LONGITUD_IE": "-76.98454", "DOCENTES": "7", "x": -76.98454, "y": -12.07297}, {"fid": "347", "NOMB_IE": "NUESTRA SEÑORA DE LA LUZ", "LATITUD_IE": "-12.0986", "LONGITUD_IE": "-77.02999", "DOCENTES": "4", "x": -77.02999, "y": -12.0986}, {"fid": "348", "NOMB_IE": "NUESTRA SEÑORA DE LA LUZ", "LATITUD_IE": "-12.09777", "LONGITUD_IE": "-77.02996", "DOCENTES": "17", "x": -77.02996, "y": -12.09777}, {"fid": "349", "NOMB_IE": "NUESTRA SEÑORA DE LA PAZ", "LATITUD_IE": "-12.09633", "LONGITUD_IE": "-77.07322", "DOCENTES": "4", "x": -77.07322, "y": -12.09633}, {"fid": "350", "NOMB_IE": "NUESTRA SEÑORA DE LA PAZ", "LATITUD_IE": "-12.09526", "LONGITUD_IE": "-77.07397", "DOCENTES": "1", "x": -77.07397, "y": -12.09526}, {"fid": "351", "NOMB_IE": "NUESTRA SEÑORA DE LAS MERCEDES", "LATITUD_IE": "-12.04846", "LONGITUD_IE": "-77.01722", "DOCENTES": "10", "x": -77.01722, "y": -12.04846}, {"fid": "352", "NOMB_IE": "NUESTRA SEÑORA DE LOURDES", "LATITUD_IE": "-12.112408", "LONGITUD_IE": "-77.009087", "DOCENTES": "65", "x": -77.009087, "y": -12.112408}, {"fid": "353", "NOMB_IE": "NUESTRA SEÑORA DE MONSERRAT", "LATITUD_IE": "-12.0426507", "LONGITUD_IE": "-77.0344745", "DOCENTES": "1", "x": -77.0344745, "y": -12.0426507}, {"fid": "354", "NOMB_IE": "NUESTRA SEÑORA DE MONSERRAT", "LATITUD_IE": "-12.04262732", "LONGITUD_IE": "-77.03685039", "DOCENTES": "5", "x": -77.03685039, "y": -12.04262732}, {"fid": "355", "NOMB_IE": "NUESTRA SEÑORA DE MONTSERRAT", "LATITUD_IE": "-12.04277", "LONGITUD_IE": "-77.03447", "DOCENTES": "40", "x": -77.03447, "y": -12.04277}, {"fid": "356", "NOMB_IE": "NUESTRA SEÑORA DE MONTSERRAT", "LATITUD_IE": "-12.04186", "LONGITUD_IE": "-77.03639", "DOCENTES": "42", "x": -77.03639, "y": -12.04186}, {"fid": "357", "NOMB_IE": "NUESTRA SEÑORA DEL PRADO", "LATITUD_IE": "-12.05183", "LONGITUD_IE": "-77.01496", "DOCENTES": "7", "x": -77.01496, "y": -12.05183}, {"fid": "358", "NOMB_IE": "ODEC LIMA", "LATITUD_IE": "-12.04277215", "LONGITUD_IE": "-77.03635978", "DOCENTES": "6", "x": -77.03635978, "y": -12.04277215}, {"fid": "359", "NOMB_IE": "OFICINA DE EDUCACION CATOLICA CASTRENSE - ODECCAS", "LATITUD_IE": "-12.07495745", "LONGITUD_IE": "-77.03609613", "DOCENTES": "2", "x": -77.03609613, "y": -12.07495745}, {"fid": "360", "NOMB_IE": "OFICINA NACIONAL DE EDUCACION CATOLICA - ONDEC", "LATITUD_IE": "-12.08504389", "LONGITUD_IE": "-77.05538371", "DOCENTES": "6", "x": -77.05538371, "y": -12.08504389}, {"fid": "361", "NOMB_IE": "PATROCINIO DE SAN JOSE", "LATITUD_IE": "-12.050105", "LONGITUD_IE": "-77.050748", "DOCENTES": "25", "x": -77.050748, "y": -12.050105}, {"fid": "362", "NOMB_IE": "PEDRO GALVEZ EGUSQUIZA", "LATITUD_IE": "-12.06429", "LONGITUD_IE": "-77.06796", "DOCENTES": "22", "x": -77.06796, "y": -12.06429}, {"fid": "363", "NOMB_IE": "PEDRO RUIZ GALLO", "LATITUD_IE": "-12.15798", "LONGITUD_IE": "-77.02295", "DOCENTES": "16", "x": -77.02295, "y": -12.15798}, {"fid": "364", "NOMB_IE": "PILOTO FEMENINO DE LIMA", "LATITUD_IE": "-12.07861", "LONGITUD_IE": "-77.03587", "DOCENTES": "12", "x": -77.03587, "y": -12.07861}, {"fid": "365", "NOMB_IE": "PILOTO JOSE PARDO", "LATITUD_IE": "-12.16593", "LONGITUD_IE": "-77.02423", "DOCENTES": "14", "x": -77.02423, "y": -12.16593}, {"fid": "366", "NOMB_IE": "PNP CAP. ALCIDES VIGO HURTADO", "LATITUD_IE": "-12.12264", "LONGITUD_IE": "-76.99421", "DOCENTES": "12", "x": -76.99421, "y": -12.12264}, {"fid": "367", "NOMB_IE": "PNP CAP. ALIPIO PONCE VASQUEZ", "LATITUD_IE": "-12.05027", "LONGITUD_IE": "-77.01284", "DOCENTES": "21", "x": -77.01284, "y": -12.05027}, {"fid": "368", "NOMB_IE": "PNP TUPAC AMARU", "LATITUD_IE": "-12.04982", "LONGITUD_IE": "-77.01277", "DOCENTES": "17", "x": -77.01277, "y": -12.04982}, {"fid": "369", "NOMB_IE": "POLITECNICO SALESIANO", "LATITUD_IE": "-12.06084", "LONGITUD_IE": "-77.04334", "DOCENTES": "20", "x": -77.04334, "y": -12.06084}, {"fid": "370", "NOMB_IE": "PRITE MARIA MONTESSORI", "LATITUD_IE": "-12.05155", "LONGITUD_IE": "-77.01258", "DOCENTES": "3", "x": -77.01258, "y": -12.05155}, {"fid": "371", "NOMB_IE": "PROMAE BREÑA", "LATITUD_IE": "-12.06597", "LONGITUD_IE": "-77.05769", "DOCENTES": "9", "x": -77.05769, "y": -12.06597}, {"fid": "372", "NOMB_IE": "PROMAE ESCUELA NACIONAL DE ARTES GRAFICAS", "LATITUD_IE": "-12.0612", "LONGITUD_IE": "-77.02547", "DOCENTES": "16", "x": -77.02547, "y": -12.0612}, {"fid": "373", "NOMB_IE": "PROMAE MAGDALENA", "LATITUD_IE": "-12.08852", "LONGITUD_IE": "-77.07202", "DOCENTES": "24", "x": -77.07202, "y": -12.08852}, {"fid": "374", "NOMB_IE": "PRONOEPSA", "LATITUD_IE": "-12.057688", "LONGITUD_IE": "-77.047257", "DOCENTES": "1", "x": -77.047257, "y": -12.057688}, {"fid": "375", "NOMB_IE": "PRONOEPSA USE 03", "LATITUD_IE": "-12.05771921", "LONGITUD_IE": "-77.04753032", "DOCENTES": "21", "x": -77.04753032, "y": -12.05771921}, {"fid": "376", "NOMB_IE": "REINA DE LA PAZ", "LATITUD_IE": "-12.10651", "LONGITUD_IE": "-77.04741", "DOCENTES": "13", "x": -77.04741, "y": -12.10651}, {"fid": "377", "NOMB_IE": "REINA DE LA PAZ", "LATITUD_IE": "-12.07504", "LONGITUD_IE": "-76.97937", "DOCENTES": "3", "x": -76.97937, "y": -12.07504}, {"fid": "378", "NOMB_IE": "REINA DE LAS AMERICAS", "LATITUD_IE": "-12.081742", "LONGITUD_IE": "-77.021958", "DOCENTES": "7", "x": -77.021958, "y": -12.081742}, {"fid": "379", "NOMB_IE": "REINA DE LAS AMERICAS", "LATITUD_IE": "-12.07699", "LONGITUD_IE": "-77.02213", "DOCENTES": "7", "x": -77.02213, "y": -12.07699}, {"fid": "380", "NOMB_IE": "REMAR", "LATITUD_IE": "-12.05242", "LONGITUD_IE": "-77.03709", "DOCENTES": "8", "x": -77.03709, "y": -12.05242}, {"fid": "381", "NOMB_IE": "REPUBLICA DE CHILE", "LATITUD_IE": "-12.0852", "LONGITUD_IE": "-77.03147", "DOCENTES": "29", "x": -77.03147, "y": -12.0852}, {"fid": "382", "NOMB_IE": "REPUBLICA DE CHILE", "LATITUD_IE": "-12.06396", "LONGITUD_IE": "-77.0499", "DOCENTES": "18", "x": -77.0499, "y": -12.06396}, {"fid": "383", "NOMB_IE": "ROSA DOMINGA PEREZ LIENDO", "LATITUD_IE": "-12.08564", "LONGITUD_IE": "-77.02115", "DOCENTES": "21", "x": -77.02115, "y": -12.08564}, {"fid": "384", "NOMB_IE": "ROSENTHAL DE LA PUENTE", "LATITUD_IE": "-12.09258", "LONGITUD_IE": "-77.07371", "DOCENTES": "5", "x": -77.07371, "y": -12.09258}, {"fid": "385", "NOMB_IE": "SALESIANO", "LATITUD_IE": "-12.09343095", "LONGITUD_IE": "-77.07343657", "DOCENTES": "1", "x": -77.07343657, "y": -12.09343095}, {"fid": "386", "NOMB_IE": "SALESIANO", "LATITUD_IE": "-12.06084", "LONGITUD_IE": "-77.04334", "DOCENTES": "2", "x": -77.04334, "y": -12.06084}, {"fid": "387", "NOMB_IE": "SAN ANTONIO DE PADUA", "LATITUD_IE": "-12.08474", "LONGITUD_IE": "-77.05859", "DOCENTES": "6", "x": -77.05859, "y": -12.08474}, {"fid": "388", "NOMB_IE": "SAN BARTOLOME", "LATITUD_IE": "-12.05433", "LONGITUD_IE": "-77.02349", "DOCENTES": "30", "x": -77.02349, "y": -12.05433}, {"fid": "389", "NOMB_IE": "SAN FRANCISCO", "LATITUD_IE": "-12.16648", "LONGITUD_IE": "-77.01969", "DOCENTES": "9", "x": -77.01969, "y": -12.16648}, {"fid": "390", "NOMB_IE": "SAN FRANCISCO DE ASIS", "LATITUD_IE": "-12.14928", "LONGITUD_IE": "-77.01667", "DOCENTES": "1", "x": -77.01667, "y": -12.14928}, {"fid": "391", "NOMB_IE": "SAN FRANCISCO DE BORJA", "LATITUD_IE": "-12.09097", "LONGITUD_IE": "-76.99747", "DOCENTES": "5", "x": -76.99747, "y": -12.09097}, {"fid": "392", "NOMB_IE": "SAN FRANCISCO DE SALES", "LATITUD_IE": "-12.06206", "LONGITUD_IE": "-77.04329", "DOCENTES": "2", "x": -77.04329, "y": -12.06206}, {"fid": "393", "NOMB_IE": "SAN FRANCISCO JAVIER", "LATITUD_IE": "-12.05611", "LONGITUD_IE": "-77.05156", "DOCENTES": "4", "x": -77.05156, "y": -12.05611}, {"fid": "394", "NOMB_IE": "SAN GABRIEL ARCANGEL", "LATITUD_IE": "-12.11415", "LONGITUD_IE": "-76.98653", "DOCENTES": "1", "x": -76.98653, "y": -12.11415}, {"fid": "395", "NOMB_IE": "SAN IGNACIO DE LOYOLA", "LATITUD_IE": "-12.0483", "LONGITUD_IE": "-77.04511", "DOCENTES": "7", "x": -77.04511, "y": -12.0483}, {"fid": "396", "NOMB_IE": "SAN JOSE MARELLO", "LATITUD_IE": "-12.073539", "LONGITUD_IE": "-77.010786", "DOCENTES": "5", "x": -77.010786, "y": -12.073539}, {"fid": "397", "NOMB_IE": "SAN JOSE OBRERO", "LATITUD_IE": "-12.062102", "LONGITUD_IE": "-77.00767", "DOCENTES": "1", "x": -77.00767, "y": -12.062102}, {"fid": "398", "NOMB_IE": "SAN JOSE OBRERO", "LATITUD_IE": "-12.062058", "LONGITUD_IE": "-77.008679", "DOCENTES": "3", "x": -77.008679, "y": -12.062058}, {"fid": "399", "NOMB_IE": "SAN LUCAS", "LATITUD_IE": "-12.07091", "LONGITUD_IE": "-77.06033", "DOCENTES": "18", "x": -77.06033, "y": -12.07091}, {"fid": "400", "NOMB_IE": "SAN LUIS", "LATITUD_IE": "-12.07633", "LONGITUD_IE": "-76.9969", "DOCENTES": "19", "x": -76.9969, "y": -12.07633}, {"fid": "401", "NOMB_IE": "SAN MARTIN DE PORRAS", "LATITUD_IE": "-12.10055", "LONGITUD_IE": "-77.05948", "DOCENTES": "1", "x": -77.05948, "y": -12.10055}, {"fid": "402", "NOMB_IE": "SAN MIGUEL", "LATITUD_IE": "-12.08114", "LONGITUD_IE": "-77.10023", "DOCENTES": "9", "x": -77.10023, "y": -12.08114}, {"fid": "403", "NOMB_IE": "SAN PEDRO DE CHORRILLOS", "LATITUD_IE": "-12.17363", "LONGITUD_IE": "-77.0056", "DOCENTES": "55", "x": -77.0056, "y": -12.17363}, {"fid": "404", "NOMB_IE": "SAN RAFAEL", "LATITUD_IE": "-12.06742", "LONGITUD_IE": "-77.03185", "DOCENTES": "4", "x": -77.03185, "y": -12.06742}, {"fid": "405", "NOMB_IE": "SAN RICARDO", "LATITUD_IE": "-12.07178", "LONGITUD_IE": "-77.02179", "DOCENTES": "5", "x": -77.02179, "y": -12.07178}, {"fid": "406", "NOMB_IE": "SAN TARCISIO", "LATITUD_IE": "-12.084432", "LONGITUD_IE": "-77.044289", "DOCENTES": "6", "x": -77.044289, "y": -12.084432}, {"fid": "407", "NOMB_IE": "SAN VICENTE DE PAUL", "LATITUD_IE": "-12.11256", "LONGITUD_IE": "-77.02523", "DOCENTES": "7", "x": -77.02523, "y": -12.11256}, {"fid": "408", "NOMB_IE": "SANTA ANA", "LATITUD_IE": "-12.04994", "LONGITUD_IE": "-77.02303", "DOCENTES": "11", "x": -77.02303, "y": -12.04994}, {"fid": "409", "NOMB_IE": "SANTA BERNARDITA", "LATITUD_IE": "-12.07618", "LONGITUD_IE": "-77.01391", "DOCENTES": "18", "x": -77.01391, "y": -12.07618}, {"fid": "410", "NOMB_IE": "SANTA CLARA DE ASIS", "LATITUD_IE": "-12.04848", "LONGITUD_IE": "-77.02097", "DOCENTES": "4", "x": -77.02097, "y": -12.04848}, {"fid": "411", "NOMB_IE": "SANTA ISABEL", "LATITUD_IE": "-12.15727", "LONGITUD_IE": "-77.01784", "DOCENTES": "4", "x": -77.01784, "y": -12.15727}, {"fid": "412", "NOMB_IE": "SANTA MARIA DE GUADALUPE", "LATITUD_IE": "-12.11928", "LONGITUD_IE": "-77.00199", "DOCENTES": "5", "x": -77.00199, "y": -12.11928}, {"fid": "413", "NOMB_IE": "SANTA MARIA GORETTI", "LATITUD_IE": "-12.06675", "LONGITUD_IE": "-77.01508", "DOCENTES": "4", "x": -77.01508, "y": -12.06675}, {"fid": "414", "NOMB_IE": "SANTA MATILDE", "LATITUD_IE": "-12.07186", "LONGITUD_IE": "-76.99625", "DOCENTES": "10", "x": -76.99625, "y": -12.07186}, {"fid": "415", "NOMB_IE": "SANTA ROSA", "LATITUD_IE": "-12.14116547", "LONGITUD_IE": "-77.02442698", "DOCENTES": "11", "x": -77.02442698, "y": -12.14116547}, {"fid": "416", "NOMB_IE": "SANTA ROSA DE LIMA", "LATITUD_IE": "-12.087214", "LONGITUD_IE": "-77.038986", "DOCENTES": "6", "x": -77.038986, "y": -12.087214}, {"fid": "417", "NOMB_IE": "SANTA TERESA DE JESUS", "LATITUD_IE": "-12.05101", "LONGITUD_IE": "-77.01181", "DOCENTES": "11", "x": -77.01181, "y": -12.05101}, {"fid": "418", "NOMB_IE": "SANTA TERESITA DEL INSTITUTO MATERNO PERINATAL", "LATITUD_IE": "-12.05299", "LONGITUD_IE": "-77.02197", "DOCENTES": "2", "x": -77.02197, "y": -12.05299}, {"fid": "419", "NOMB_IE": "SANTA VICENTA MARIA", "LATITUD_IE": "-12.079561", "LONGITUD_IE": "-77.047489", "DOCENTES": "8", "x": -77.047489, "y": -12.079561}, {"fid": "420", "NOMB_IE": "SANTIAGO ANTUNEZ DE MAYOLO", "LATITUD_IE": "-12.071223", "LONGITUD_IE": "-77.02563", "DOCENTES": "2", "x": -77.02563, "y": -12.071223}, {"fid": "421", "NOMB_IE": "SANTISIMA TRINIDAD", "LATITUD_IE": "-12.05127", "LONGITUD_IE": "-77.0644", "DOCENTES": "22", "x": -77.0644, "y": -12.05127}, {"fid": "422", "NOMB_IE": "SANTISIMO SALVADOR", "LATITUD_IE": "-12.04765", "LONGITUD_IE": "-77.022", "DOCENTES": "8", "x": -77.022, "y": -12.04765}, {"fid": "423", "NOMB_IE": "SARITA COLONIA I", "LATITUD_IE": "-12.05896864", "LONGITUD_IE": "-77.00975359", "DOCENTES": "1", "x": -77.00975359, "y": -12.05896864}, {"fid": "424", "NOMB_IE": "SEÑOR DE LA MISERICORDIA", "LATITUD_IE": "-12.05193", "LONGITUD_IE": "-77.01502", "DOCENTES": "16", "x": -77.01502, "y": -12.05193}, {"fid": "425", "NOMB_IE": "SIMON BOLIVAR", "LATITUD_IE": "-12.0618", "LONGITUD_IE": "-77.06906", "DOCENTES": "42", "x": -77.06906, "y": -12.0618}, {"fid": "426", "NOMB_IE": "SINNOMBRE08", "LATITUD_IE": "-12.14540628", "LONGITUD_IE": "-77.00475327", "DOCENTES": "1", "x": -77.00475327, "y": -12.14540628}, {"fid": "427", "NOMB_IE": "SOR QUERUBINA DE SAN PEDRO", "LATITUD_IE": "-12.12276", "LONGITUD_IE": "-76.99994", "DOCENTES": "1", "x": -76.99994, "y": -12.12276}, {"fid": "428", "NOMB_IE": "SOR ROSA LARRABURE", "LATITUD_IE": "-12.10055", "LONGITUD_IE": "-77.05948", "DOCENTES": "10", "x": -77.05948, "y": -12.10055}, {"fid": "429", "NOMB_IE": "STELLA MARIS", "LATITUD_IE": "-12.06667", "LONGITUD_IE": "-77.1065", "DOCENTES": "1", "x": -77.1065, "y": -12.06667}, {"fid": "430", "NOMB_IE": "TALENTOSOS SOBRESALIENTES", "LATITUD_IE": "-12.07885", "LONGITUD_IE": "-77.00801", "DOCENTES": "7", "x": -77.00801, "y": -12.07885}, {"fid": "431", "NOMB_IE": "TECNICO FAP MANUEL POLO JIMENEZ", "LATITUD_IE": "-12.14583", "LONGITUD_IE": "-77.01345", "DOCENTES": "4", "x": -77.01345, "y": -12.14583}, {"fid": "432", "NOMB_IE": "TERESA GONZALES DE FANNING", "LATITUD_IE": "-12.07982", "LONGITUD_IE": "-77.04353", "DOCENTES": "44", "x": -77.04353, "y": -12.07982}, {"fid": "433", "NOMB_IE": "TERESA GONZALES DE FANNING", "LATITUD_IE": "-12.07713", "LONGITUD_IE": "-77.04575", "DOCENTES": "149", "x": -77.04575, "y": -12.07713}, {"fid": "434", "NOMB_IE": "TNTE. CRNL. PEDRO RUIZ GALLO", "LATITUD_IE": "-12.1606", "LONGITUD_IE": "-77.0195", "DOCENTES": "2", "x": -77.0195, "y": -12.1606}, {"fid": "435", "NOMB_IE": "TOÑITO SILVA GUERRERO", "LATITUD_IE": "-12.10565", "LONGITUD_IE": "-77.05545", "DOCENTES": "2", "x": -77.05545, "y": -12.10565}, {"fid": "436", "NOMB_IE": "TUPAC AMARU", "LATITUD_IE": "-12.08248", "LONGITUD_IE": "-77.00805", "DOCENTES": "73", "x": -77.00805, "y": -12.08248}, {"fid": "437", "NOMB_IE": "TUPAC AMARU", "LATITUD_IE": "-12.073456", "LONGITUD_IE": "-76.994234", "DOCENTES": "1", "x": -76.994234, "y": -12.073456}, {"fid": "438", "NOMB_IE": "UGEL 03 PUEBLO LIBRE", "LATITUD_IE": "-12.06948750587411", "LONGITUD_IE": "-77.03023043443596", "DOCENTES": "447", "x": -77.03023043443596, "y": -12.06948750587411}, {"fid": "439", "NOMB_IE": "UGEL 07 SAN BORJA", "LATITUD_IE": "-12.10847", "LONGITUD_IE": "-77.005073", "DOCENTES": "240", "x": -77.005073, "y": -12.10847}, {"fid": "440", "NOMB_IE": "URPI WASSI", "LATITUD_IE": "-12.14404", "LONGITUD_IE": "-76.9865", "DOCENTES": "3", "x": -76.9865, "y": -12.14404}, {"fid": "441", "NOMB_IE": "VICTORIA BARCIA BONIFFATTI", "LATITUD_IE": "-12.12039", "LONGITUD_IE": "-76.9934", "DOCENTES": "18", "x": -76.9934, "y": -12.12039}, {"fid": "442", "NOMB_IE": "VIRGEN DE FATIMA DE BARRANCO", "LATITUD_IE": "-12.14289", "LONGITUD_IE": "-77.01523", "DOCENTES": "4", "x": -77.01523, "y": -12.14289}, {"fid": "443", "NOMB_IE": "VIRGEN DE LA ESPERANZA", "LATITUD_IE": "-12.07354", "LONGITUD_IE": "-77.10963", "DOCENTES": "5", "x": -77.10963, "y": -12.07354}, {"fid": "444", "NOMB_IE": "VIRGEN DE LORETO", "LATITUD_IE": "-12.1571", "LONGITUD_IE": "-77.0084", "DOCENTES": "1", "x": -77.0084, "y": -12.1571}, {"fid": "445", "NOMB_IE": "VIRGEN DEL CARMEN", "LATITUD_IE": "-12.06600149", "LONGITUD_IE": "-77.10804913", "DOCENTES": "1", "x": -77.10804913, "y": -12.06600149}, {"fid": "446", "NOMB_IE": "VIRGEN DEL MORRO SOLAR", "LATITUD_IE": "-12.18604", "LONGITUD_IE": "-77.0179", "DOCENTES": "37", "x": -77.0179, "y": -12.18604}, {"fid": "447", "NOMB_IE": "VIRGEN DEL ROSARIO", "LATITUD_IE": "-12.14375", "LONGITUD_IE": "-77.01405", "DOCENTES": "14", "x": -77.01405, "y": -12.14375}, {"fid": "448", "NOMB_IE": "VIRGO POTENS", "LATITUD_IE": "-12.055", "LONGITUD_IE": "-77.01568", "DOCENTES": "70", "x": -77.01568, "y": -12.055}, {"fid": "449", "NOMB_IE": "YOLANDA PRIETO ANICAMA", "LATITUD_IE": "-12.06097", "LONGITUD_IE": "-77.05522", "DOCENTES": "5", "x": -77.05522, "y": -12.06097}]};
+        const cuadrillaData = {"nombre": "cuadrilla_credito", "tipo": "poligono", "features": [{"fid": "1", "cuadrilla": "CUAD-05-01", "docentes_2": "113", "ratio": "0.4602720590000002", "oferta": "5565809.76", "semaforo": "Anaranjado", "vertices": [[-77.03763, -12.18604], [-77.01962999999999, -12.18604], [-77.01962999999999, -12.16804], [-77.03763, -12.16804], [-77.03763, -12.18604]]}, {"fid": "2", "cuadrilla": "CUAD-06-07", "docentes_2": "636", "ratio": "3.2707342560000106", "oferta": "27967740.799999997", "semaforo": "Rojo", "vertices": [[-77.01962999999999, -12.07804], [-77.00162999999999, -12.07804], [-77.00162999999999, -12.060039999999999], [-77.01962999999999, -12.060039999999999], [-77.01962999999999, -12.07804]]}, {"fid": "3", "cuadrilla": "CUAD-03-09", "docentes_2": "134", "ratio": "0.6395815080000007", "oferta": "5817512.819999999", "semaforo": "Anaranjado", "vertices": [[-77.07363, -12.04204], [-77.05563, -12.04204], [-77.05563, -12.02404], [-77.07363, -12.02404], [-77.07363, -12.04204]]}, {"fid": "4", "cuadrilla": "CUAD-03-08", "docentes_2": "250", "ratio": "1.374591413000001", "oferta": "10213926.59", "semaforo": "Rojo", "vertices": [[-77.07363, -12.06004], [-77.05563, -12.06004], [-77.05563, -12.04204], [-77.07363, -12.04204], [-77.07363, -12.06004]]}, {"fid": "5", "cuadrilla": "CUAD-07-04", "docentes_2": "78", "ratio": "0.3422938710000001", "oferta": "3845810.98", "semaforo": "Anaranjado", "vertices": [[-77.00162999999999, -12.13204], [-76.98362999999999, -12.13204], [-76.98362999999999, -12.11404], [-77.00162999999999, -12.11404], [-77.00162999999999, -12.13204]]}, {"fid": "6", "cuadrilla": "CUAD-05-06", "docentes_2": "487", "ratio": "2.768060791000004", "oferta": "18324972.98", "semaforo": "Rojo", "vertices": [[-77.03763, -12.09604], [-77.01962999999999, -12.09604], [-77.01962999999999, -12.07804], [-77.03763, -12.07804], [-77.03763, -12.09604]]}, {"fid": "7", "cuadrilla": "CUAD-03-06", "docentes_2": "527", "ratio": "2.7069222260000037", "oferta": "22290570.390000004", "semaforo": "Rojo", "vertices": [[-77.07363, -12.09604], [-77.05563, -12.09604], [-77.05563, -12.07804], [-77.07363, -12.07804], [-77.07363, -12.09604]]}, {"fid": "8", "cuadrilla": "CUAD-04-08", "docentes_2": "939", "ratio": "4.491019139000009", "oferta": "39906177.94000001", "semaforo": "Rojo", "vertices": [[-77.05563, -12.06004], [-77.03763, -12.06004], [-77.03763, -12.04204], [-77.05563, -12.04204], [-77.05563, -12.06004]]}, {"fid": "9", "cuadrilla": "CUAD-04-07", "docentes_2": "504", "ratio": "2.2142209360000042", "oferta": "20561135.240000002", "semaforo": "Rojo", "vertices": [[-77.05563, -12.07804], [-77.03763, -12.07804], [-77.03763, -12.060039999999999], [-77.05563, -12.060039999999999], [-77.05563, -12.07804]]}, {"fid": "10", "cuadrilla": "CUAD-06-08", "docentes_2": "495", "ratio": "2.5859055800000066", "oferta": "22031402.370000005", "semaforo": "Rojo", "vertices": [[-77.01962999999999, -12.06004], [-77.00162999999999, -12.06004], [-77.00162999999999, -12.04204], [-77.01962999999999, -12.04204], [-77.01962999999999, -12.06004]]}, {"fid": "11", "cuadrilla": "CUAD-06-04", "docentes_2": "348", "ratio": "1.3817093970000014", "oferta": "15996030.179999998", "semaforo": "Rojo", "vertices": [[-77.01962999999999, -12.13204], [-77.00162999999999, -12.13204], [-77.00162999999999, -12.11404], [-77.01962999999999, -12.11404], [-77.01962999999999, -12.13204]]}, {"fid": "12", "cuadrilla": "CUAD-03-07", "docentes_2": "234", "ratio": "1.1683605110000004", "oferta": "10061188.36", "semaforo": "Anaranjado", "vertices": [[-77.07363, -12.07804], [-77.05563, -12.07804], [-77.05563, -12.060039999999999], [-77.07363, -12.060039999999999], [-77.07363, -12.07804]]}, {"fid": "13", "cuadrilla": "CUAD-05-02", "docentes_2": "304", "ratio": "1.3973015290000028", "oferta": "14070734.28", "semaforo": "Rojo", "vertices": [[-77.03763, -12.16804], [-77.01962999999999, -12.16804], [-77.01962999999999, -12.150039999999999], [-77.03763, -12.150039999999999], [-77.03763, -12.16804]]}, {"fid": "14", "cuadrilla": "CUAD-06-09", "docentes_2": "5", "ratio": "0.058451059", "oferta": "265671.36", "semaforo": "Amarillo", "vertices": [[-77.01962999999999, -12.04204], [-77.00162999999999, -12.04204], [-77.00162999999999, -12.02404], [-77.01962999999999, -12.02404], [-77.01962999999999, -12.04204]]}, {"fid": "15", "cuadrilla": "CUAD-06-05", "docentes_2": "620", "ratio": "3.331758735000003", "oferta": "21510851.040000003", "semaforo": "Rojo", "vertices": [[-77.01962999999999, -12.114040000000001], [-77.00162999999999, -12.114040000000001], [-77.00162999999999, -12.09604], [-77.01962999999999, -12.09604], [-77.01962999999999, -12.114040000000001]]}, {"fid": "16", "cuadrilla": "CUAD-06-03", "docentes_2": "279", "ratio": "1.2253842820000036", "oferta": "12395695.669999998", "semaforo": "Rojo", "vertices": [[-77.01962999999999, -12.15004], [-77.00162999999999, -12.15004], [-77.00162999999999, -12.13204], [-77.01962999999999, -12.13204], [-77.01962999999999, -12.15004]]}, {"fid": "17", "cuadrilla": "CUAD-02-08", "docentes_2": "124", "ratio": "0.6050235100000005", "oferta": "5872688.02", "semaforo": "Anaranjado", "vertices": [[-77.09163, -12.06004], [-77.07363, -12.06004], [-77.07363, -12.04204], [-77.09163, -12.04204], [-77.09163, -12.06004]]}, {"fid": "18", "cuadrilla": "CUAD-07-07", "docentes_2": "308", "ratio": "1.4478580080000052", "oferta": "14300622.979999999", "semaforo": "Rojo", "vertices": [[-77.00162999999999, -12.07804], [-76.98362999999999, -12.07804], [-76.98362999999999, -12.060039999999999], [-77.00162999999999, -12.060039999999999], [-77.00162999999999, -12.07804]]}, {"fid": "19", "cuadrilla": "CUAD-07-03", "docentes_2": "44", "ratio": "0.19654735999999995", "oferta": "2329829.19", "semaforo": "Amarillo", "vertices": [[-77.00162999999999, -12.15004], [-76.98362999999999, -12.15004], [-76.98362999999999, -12.13204], [-77.00162999999999, -12.13204], [-77.00162999999999, -12.15004]]}, {"fid": "20", "cuadrilla": "CUAD-02-07", "docentes_2": "87", "ratio": "0.391614539", "oferta": "4248288.58", "semaforo": "Anaranjado", "vertices": [[-77.09163, -12.07804], [-77.07363, -12.07804], [-77.07363, -12.060039999999999], [-77.09163, -12.060039999999999], [-77.09163, -12.07804]]}, {"fid": "21", "cuadrilla": "CUAD-06-02", "docentes_2": "224", "ratio": "1.0294196840000023", "oferta": "10308156.340000002", "semaforo": "Anaranjado", "vertices": [[-77.01962999999999, -12.16804], [-77.00162999999999, -12.16804], [-77.00162999999999, -12.150039999999999], [-77.01962999999999, -12.150039999999999], [-77.01962999999999, -12.16804]]}, {"fid": "22", "cuadrilla": "CUAD-06-01", "docentes_2": "161", "ratio": "0.789073490000001", "oferta": "7938534.929999998", "semaforo": "Anaranjado", "vertices": [[-77.01962999999999, -12.18604], [-77.00162999999999, -12.18604], [-77.00162999999999, -12.16804], [-77.01962999999999, -12.16804], [-77.01962999999999, -12.18604]]}, {"fid": "23", "cuadrilla": "CUAD-02-06", "docentes_2": "301", "ratio": "1.4222517720000047", "oferta": "13127214.389999999", "semaforo": "Rojo", "vertices": [[-77.09163, -12.09604], [-77.07363, -12.09604], [-77.07363, -12.07804], [-77.09163, -12.07804], [-77.09163, -12.09604]]}, {"fid": "24", "cuadrilla": "CUAD-08-07", "docentes_2": "87", "ratio": "0.37899539200000004", "oferta": "3371882.1999999997", "semaforo": "Anaranjado", "vertices": [[-76.98362999999999, -12.07804], [-76.96562999999999, -12.07804], [-76.96562999999999, -12.060039999999999], [-76.98362999999999, -12.060039999999999], [-76.98362999999999, -12.07804]]}, {"fid": "25", "cuadrilla": "CUAD-05-07", "docentes_2": "922", "ratio": "5.436455317999995", "oferta": "28749855.310000006", "semaforo": "Rojo", "vertices": [[-77.03763, -12.07804], [-77.01962999999999, -12.07804], [-77.01962999999999, -12.060039999999999], [-77.03763, -12.060039999999999], [-77.03763, -12.07804]]}, {"fid": "26", "cuadrilla": "CUAD-05-08", "docentes_2": "642", "ratio": "3.2415321230000123", "oferta": "25795165.739999995", "semaforo": "Rojo", "vertices": [[-77.03763, -12.06004], [-77.01962999999999, -12.06004], [-77.01962999999999, -12.04204], [-77.03763, -12.04204], [-77.03763, -12.06004]]}, {"fid": "27", "cuadrilla": "CUAD-01-07", "docentes_2": "141", "ratio": "0.7329744010000007", "oferta": "6708660.69", "semaforo": "Anaranjado", "vertices": [[-77.10963, -12.07804], [-77.09163, -12.07804], [-77.09163, -12.060039999999999], [-77.10963, -12.060039999999999], [-77.10963, -12.07804]]}, {"fid": "28", "cuadrilla": "CUAD-08-03", "docentes_2": "36", "ratio": "0.179972633", "oferta": "1650480.16", "semaforo": "Amarillo", "vertices": [[-76.98362999999999, -12.15004], [-76.96562999999999, -12.15004], [-76.96562999999999, -12.13204], [-76.98362999999999, -12.13204], [-76.98362999999999, -12.15004]]}, {"fid": "29", "cuadrilla": "CUAD-06-06", "docentes_2": "150", "ratio": "0.7794664570000015", "oferta": "6453792.150000001", "semaforo": "Anaranjado", "vertices": [[-77.01962999999999, -12.09604], [-77.00162999999999, -12.09604], [-77.00162999999999, -12.07804], [-77.01962999999999, -12.07804], [-77.01962999999999, -12.09604]]}, {"fid": "30", "cuadrilla": "CUAD-08-06", "docentes_2": "36", "ratio": "0.14981401", "oferta": "1544715.84", "semaforo": "Amarillo", "vertices": [[-76.98362999999999, -12.09604], [-76.96562999999999, -12.09604], [-76.96562999999999, -12.07804], [-76.98362999999999, -12.07804], [-76.98362999999999, -12.09604]]}, {"fid": "31", "cuadrilla": "CUAD-05-04", "docentes_2": "54", "ratio": "0.20718396999999994", "oferta": "2246902.61", "semaforo": "Amarillo", "vertices": [[-77.03763, -12.13204], [-77.01962999999999, -12.13204], [-77.01962999999999, -12.11404], [-77.03763, -12.11404], [-77.03763, -12.13204]]}, {"fid": "32", "cuadrilla": "CUAD-05-05", "docentes_2": "176", "ratio": "0.8380242430000019", "oferta": "7822317.659999999", "semaforo": "Anaranjado", "vertices": [[-77.03763, -12.114040000000001], [-77.01962999999999, -12.114040000000001], [-77.01962999999999, -12.09604], [-77.03763, -12.09604], [-77.03763, -12.114040000000001]]}, {"fid": "33", "cuadrilla": "CUAD-05-03", "docentes_2": "157", "ratio": "0.5978192670000008", "oferta": "7336682.14", "semaforo": "Anaranjado", "vertices": [[-77.03763, -12.15004], [-77.01962999999999, -12.15004], [-77.01962999999999, -12.13204], [-77.03763, -12.13204], [-77.03763, -12.15004]]}, {"fid": "34", "cuadrilla": "CUAD-04-04", "docentes_2": "62", "ratio": "0.2671051659999999", "oferta": "2703812.88", "semaforo": "Anaranjado", "vertices": [[-77.05563, -12.13204], [-77.03763, -12.13204], [-77.03763, -12.11404], [-77.05563, -12.11404], [-77.05563, -12.13204]]}, {"fid": "35", "cuadrilla": "CUAD-04-09", "docentes_2": "141", "ratio": "0.7048129360000008", "oferta": "6430744.47", "semaforo": "Anaranjado", "vertices": [[-77.05563, -12.04204], [-77.03763, -12.04204], [-77.03763, -12.02404], [-77.05563, -12.02404], [-77.05563, -12.04204]]}, {"fid": "36", "cuadrilla": "CUAD-07-05", "docentes_2": "46", "ratio": "0.256642585", "oferta": "1721054.1", "semaforo": "Anaranjado", "vertices": [[-77.00162999999999, -12.114040000000001], [-76.98362999999999, -12.114040000000001], [-76.98362999999999, -12.09604], [-77.00162999999999, -12.09604], [-77.00162999999999, -12.114040000000001]]}, {"fid": "37", "cuadrilla": "CUAD-09-06", "docentes_2": "22", "ratio": "0.06288016299999999", "oferta": "1256744.17", "semaforo": "Amarillo", "vertices": [[-76.96562999999999, -12.09604], [-76.94762999999999, -12.09604], [-76.94762999999999, -12.07804], [-76.96562999999999, -12.07804], [-76.96562999999999, -12.09604]]}, {"fid": "38", "cuadrilla": "CUAD-04-06", "docentes_2": "192", "ratio": "1.0475734230000011", "oferta": "7455004.629999999", "semaforo": "Anaranjado", "vertices": [[-77.05563, -12.09604], [-77.03763, -12.09604], [-77.03763, -12.07804], [-77.05563, -12.07804], [-77.05563, -12.09604]]}, {"fid": "39", "cuadrilla": "CUAD-07-06", "docentes_2": "35", "ratio": "0.17485237099999998", "oferta": "1079679.78", "semaforo": "Amarillo", "vertices": [[-77.00162999999999, -12.09604], [-76.98362999999999, -12.09604], [-76.98362999999999, -12.07804], [-77.00162999999999, -12.07804], [-77.00162999999999, -12.09604]]}, {"fid": "40", "cuadrilla": "CUAD-01-06", "docentes_2": "65", "ratio": "0.29470591299999993", "oferta": "2725711.4699999997", "semaforo": "Anaranjado", "vertices": [[-77.10963, -12.09604], [-77.09163, -12.09604], [-77.09163, -12.07804], [-77.10963, -12.07804], [-77.10963, -12.09604]]}, {"fid": "41", "cuadrilla": "CUAD-05-09", "docentes_2": "42", "ratio": "0.27976505399999996", "oferta": "1988304.66", "semaforo": "Anaranjado", "vertices": [[-77.03763, -12.04204], [-77.01962999999999, -12.04204], [-77.01962999999999, -12.02404], [-77.03763, -12.02404], [-77.03763, -12.04204]]}, {"fid": "42", "cuadrilla": "CUAD-08-05", "docentes_2": "18", "ratio": "0.07565497499999999", "oferta": "653496.85", "semaforo": "Amarillo", "vertices": [[-76.98362999999999, -12.114040000000001], [-76.96562999999999, -12.114040000000001], [-76.96562999999999, -12.09604], [-76.98362999999999, -12.09604], [-76.98362999999999, -12.114040000000001]]}, {"fid": "43", "cuadrilla": "CUAD-03-05", "docentes_2": "27", "ratio": "0.10788816300000001", "oferta": "1326354.0", "semaforo": "Amarillo", "vertices": [[-77.07363, -12.114040000000001], [-77.05563, -12.114040000000001], [-77.05563, -12.09604], [-77.07363, -12.09604], [-77.07363, -12.114040000000001]]}, {"fid": "44", "cuadrilla": "CUAD-04-05", "docentes_2": "37", "ratio": "0.19369976199999994", "oferta": "1900613.52", "semaforo": "Amarillo", "vertices": [[-77.05563, -12.114040000000001], [-77.03763, -12.114040000000001], [-77.03763, -12.09604], [-77.05563, -12.09604], [-77.05563, -12.114040000000001]]}, {"fid": "45", "cuadrilla": "CUAD-08-04", "docentes_2": "44", "ratio": "0.24740093400000002", "oferta": "1247916.66", "semaforo": "Amarillo", "vertices": [[-76.98362999999999, -12.13204], [-76.96562999999999, -12.13204], [-76.96562999999999, -12.11404], [-76.98362999999999, -12.11404], [-76.98362999999999, -12.13204]]}]};
+        
+        console.log('📊 Datos de cuadrillas recibidos:', cuadrillaData);
+        
+        // =============================================
+        // 🗺️ INICIALIZACIÓN DEL MAPA
+        // =============================================
+        
+        // Calcular centro del mapa
+        function calcularCentro() {
+            let minLat = Infinity, maxLat = -Infinity;
+            let minLng = Infinity, maxLng = -Infinity;
+            
+            // Buscar en colegios
+            colegiosData.features.forEach(f => {
+                if (f.x && f.y) {
+                    minLat = Math.min(minLat, f.y);
+                    maxLat = Math.max(maxLat, f.y);
+                    minLng = Math.min(minLng, f.x);
+                    maxLng = Math.max(maxLng, f.x);
+                }
+            });
+            
+            // Buscar en cuadrillas
+            cuadrillaData.features.forEach(f => {
+                if (f.vertices && f.vertices.length > 0) {
+                    f.vertices.forEach(v => {
+                        minLat = Math.min(minLat, v[1]);
+                        maxLat = Math.max(maxLat, v[1]);
+                        minLng = Math.min(minLng, v[0]);
+                        maxLng = Math.max(maxLng, v[0]);
+                    });
+                }
+            });
+            
+            // Si no hay datos, usar valores por defecto
+            if (minLat === Infinity) {
+                return [4.60971, -74.08175]; // Bogotá por defecto
+            }
+            
+            return [
+                (minLat + maxLat) / 2,
+                (minLng + maxLng) / 2
+            ];
+        }
+        
+        // Inicializar mapa
+        const centro = calcularCentro();
+        const map = L.map('map').setView(centro, 13);
+        
+        // Capa base
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // =============================================
+        // 🏫 CAPA DE COLEGIOS (PUNTOS)
+        // =============================================
+        const colegiosLayer = L.layerGroup();
+        
+        colegiosData.features.forEach(feature => {
+            if (feature.x && feature.y) {
+                const marker = L.circleMarker([feature.y, feature.x], {
+                    radius: 6,
+                    fillColor: '#2B84C0',
+                    color: '#186294',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+                
+                // Popup con información
+                let popupContent = '<div style="max-width: 250px;"><h4 style="color:#e74c3c">🏫 Colegio</h4>';
+                
+                for (const [key, value] of Object.entries(feature)) {
+                    if (!['x', 'y'].includes(key) && value && value.trim() !== '') {
+                        popupContent += `<p><strong>${key}:</strong> ${value}</p>`;
+                    }
+                }
+                
+                popupContent += '</div>';
+                marker.bindPopup(popupContent);
+                marker.addTo(colegiosLayer);
+            }
+        });
+        
+        // =============================================
+        // 📊 CAPA DE CUADRILLAS (POLÍGONOS) CON COLORES
+        // =============================================
+        const cuadrillaLayer = L.layerGroup();
+        
+        console.log('🎨 Procesando cuadrillas con colores...');
+        
+        cuadrillaData.features.forEach((feature, index) => {
+            if (feature.vertices && feature.vertices.length > 0) {
+                // Determinar prioridad y color
+                let prioridad = '';
+                let color = '#3498db'; // Color por defecto (azul)
+                
+                console.log(`\n📋 Cuadrilla #${index + 1}:`);
+                console.log('Campos disponibles:', Object.keys(feature));
+                
+                // BUSCAR CAMPO DE PRIORIDAD
+                const posiblesCamposPrioridad = [
+                    'prioridad', 'Prioridad', 'PRIORIDAD',
+                    'riesgo', 'Riesgo', 'RIESGO',
+                    'nivel', 'Nivel', 'NIVEL',
+                    'color', 'Color', 'COLOR',
+                    'estado', 'Estado', 'ESTADO',
+                    'categoria', 'Categoria', 'CATEGORIA',
+                    'tipo', 'Tipo', 'TIPO',
+                    'clasificacion', 'Clasificacion', 'CLASIFICACION',
+                    'semáforo', 'semáforo', 'SEMÁFORO',
+                    'semaforo', 'Semaforo', 'SEMAFORO'
+                ];
+                
+                // 1. Buscar en campos específicos
+                for (const campo of posiblesCamposPrioridad) {
+                    if (feature[campo] !== undefined && feature[campo] !== null && feature[campo].toString().trim() !== '') {
+                        prioridad = feature[campo].toString();
+                        console.log(`✅ Campo encontrado: "${campo}" = "${prioridad}"`);
+                        break;
+                    }
+                }
+                
+                // 2. Si no se encontró, buscar en TODOS los campos
+                if (!prioridad) {
+                    console.log('🔍 Buscando prioridad en todos los campos...');
+                    for (const [key, value] of Object.entries(feature)) {
+                        if (key !== 'vertices' && value && value.toString().trim() !== '') {
+                            const valorStr = value.toString().toLowerCase();
+                            // Buscar palabras clave de prioridad
+                            if (valorStr.includes('alta') || valorStr.includes('alto') || 
+                                valorStr.includes('media') || valorStr.includes('medio') || 
+                                valorStr.includes('bajo') || valorStr.includes('baja') || 
+                                valorStr.includes('rojo') || valorStr.includes('amarillo') || 
+                                valorStr.includes('anaranjado') || valorStr.includes('naranja')) {
+                                prioridad = value.toString();
+                                console.log(`✅ Prioridad encontrada en campo "${key}": "${prioridad}"`);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // 3. Si aún no hay prioridad, usar un valor por defecto
+                if (!prioridad) {
+                    prioridad = 'Sin prioridad';
+                    console.log('⚠️ No se encontró prioridad, usando valor por defecto');
+                }
+                
+                // Obtener color según prioridad
+                color = obtenerColorSegunPrioridad(prioridad);
+                console.log(`🎨 Color asignado: ${color} (para prioridad: "${prioridad}")`);
+                
+                // Convertir vertices
+                const latLngs = feature.vertices.map(v => [v[1], v[0]]);
+                
+                // Crear polígono con el COLOR CORRESPONDIENTE
+                const polygon = L.polygon(latLngs, {
+                    color: color,
+                    weight: 3,
+                    opacity: 0.8,
+                    fillColor: color,
+                    fillOpacity: 0.4
+                });
+                
+                // Popup con información
+                let popupContent = '<div style="max-width: 300px;"><h4 style="color:' + color + '">📊 Cuadrilla</h4>';
+                
+                // Mostrar prioridad en color
+                popupContent += `<p><strong>Prioridad:</strong> <span style="color:${color}; font-weight:bold">${prioridad}</span></p>`;
+                
+                // Mostrar otros campos (excepto vertices)
+                for (const [key, value] of Object.entries(feature)) {
+                    if (key !== 'vertices' && value && value.toString().trim() !== '') {
+                        // No mostrar prioridad dos veces
+                        const keyLower = key.toLowerCase();
+                        if (!keyLower.includes('prioridad') && !keyLower.includes('color')) {
+                            popupContent += `<p><strong>${key}:</strong> ${value}</p>`;
+                        }
+                    }
+                }
+                
+                popupContent += '</div>';
+                polygon.bindPopup(popupContent);
+                polygon.addTo(cuadrillaLayer);
+            }
+        });
+        
+        console.log('✅ Total cuadrillas procesadas:', cuadrillaData.features.length);
+        
+        // =============================================
+        // 🗺️ AÑADIR CAPAS AL MAPA
+        // =============================================
+        colegiosLayer.addTo(map);
+        cuadrillaLayer.addTo(map);
+        
+        // Ajustar vista a todas las capas
+        const bounds = L.latLngBounds([]);
+        
+        colegiosLayer.getLayers().forEach(layer => {
+            bounds.extend(layer.getLatLng());
+        });
+        
+        cuadrillaLayer.getLayers().forEach(layer => {
+            if (layer.getBounds) {
+                bounds.extend(layer.getBounds());
+            }
+        });
+        
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+        
+        // =============================================
+        // 🎮 CONTROLES DEL MAPA
+        // =============================================
+        
+        // Control de capas
+        document.getElementById('toggle-colegios').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                map.addLayer(colegiosLayer);
+            } else {
+                map.removeLayer(colegiosLayer);
+            }
+        });
+        
+        document.getElementById('toggle-cuadrillas').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                map.addLayer(cuadrillaLayer);
+            } else {
+                map.removeLayer(cuadrillaLayer);
+            }
+        });
+        
+        // Panel minimizable
+        let panelMinimized = false;
+        function togglePanel() {
+            panelMinimized = !panelMinimized;
+            const panel = document.getElementById('panel');
+            const panelContent = panel.querySelector('.panel-content');
+            const toggleBtn = document.getElementById('toggle-panel');
+            
+            if (panelMinimized) {
+                panel.style.height = '50px';
+                panel.style.overflow = 'hidden';
+                panelContent.style.display = 'none';
+                toggleBtn.innerHTML = '+';
+                toggleBtn.title = 'Maximizar panel';
+            } else {
+                panel.style.height = 'auto';
+                panel.style.overflow = 'auto';
+                panelContent.style.display = 'block';
+                toggleBtn.innerHTML = '−';
+                toggleBtn.title = 'Minimizar panel';
+            }
+        }
+        document.getElementById('toggle-panel').addEventListener('click', togglePanel);
+        
+        // Geolocalización
+        document.getElementById('btn-location').addEventListener('click', function() {
+            if (navigator.geolocation) {
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '⏳';
+                btn.disabled = true;
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        
+                        // Eliminar marcador anterior si existe
+                        if (window.userMarker) {
+                            map.removeLayer(window.userMarker);
+                        }
+                        
+                        // Crear nuevo marcador
+                        window.userMarker = L.marker([lat, lng], {
+                            title: 'Tu ubicación',
+                            icon: L.icon({
+                                iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41]
+                            })
+                        }).addTo(map);
+                        
+                        window.userMarker.bindPopup('<b>📍 Tu ubicación actual</b>').openPopup();
+                        
+                        // Centrar mapa
+                        map.setView([lat, lng], 15);
+                        
+                        // Restaurar botón
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        
+                        console.log('✅ Ubicación obtenida:', lat, lng);
+                    },
+                    function(error) {
+                        let message = 'No se pudo obtener tu ubicación.';
+                        
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                message = 'Permiso denegado. Por favor, permite el acceso a tu ubicación.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                message = 'Ubicación no disponible. Verifica tu conexión GPS.';
+                                break;
+                            case error.TIMEOUT:
+                                message = 'Tiempo agotado. Intenta de nuevo.';
+                                break;
+                        }
+                        
+                        alert(message);
+                        
+                        // Restaurar botón
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            } else {
+                alert('Tu navegador no soporta geolocalización');
+            }
+        });
+        
+        // Pantalla completa
+        document.getElementById('btn-fullscreen').addEventListener('click', function() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(console.log);
+                this.innerHTML = '✕';
+            } else {
+                document.exitFullscreen();
+                this.innerHTML = '⛶';
+            }
+        });
+        
+        // Detectar cambios en fullscreen
+        document.addEventListener('fullscreenchange', function() {
+            const btn = document.getElementById('btn-fullscreen');
+            if (document.fullscreenElement) {
+                btn.innerHTML = '✕';
+            } else {
+                btn.innerHTML = '⛶';
+            }
+        });
+        
+        // Redimensionar mapa cuando cambia el tamaño de ventana
+        window.addEventListener('resize', function() {
+            setTimeout(() => map.invalidateSize(), 100);
+        });
+        
+        // =============================================
+        // 📊 CONSOLA DEBUG
+        // =============================================
+        console.log('='.repeat(60));
+        console.log('✅ MAPA CARGADO EXITOSAMENTE');
+        console.log('='.repeat(60));
+        console.log(`🏫 Colegios: ${colegiosData.features.length}`);
+        console.log(`📊 Cuadrillas: ${cuadrillaData.features.length}`);
+        console.log(`🎨 Sistema de colores: SEMÁFORO DE 3 COLORES`);
+        console.log(`🎯 Mapeo de colores: ROJO=Alta, ANARANJADO=Media, AMARILLO=Bajo`);
+        console.log('='.repeat(60));
+        
+        // Mostrar información de debug en la página
+        const debugInfo = `✅ Mapa cargado: ${colegiosData.features.length} colegios, ${cuadrillaData.features.length} cuadrillas`;
+        console.log(debugInfo);
+    </script>
+</body>
+</html>
