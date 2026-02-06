@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Mapas QGIS con Filtro</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: Arial, sans-serif; }
+        #map { height:100vh; width:100%; }
+        #panel {
+            position:absolute; top:20px; left:20px;
+            background:white; padding:15px; border-radius:10px;
+            box-shadow:0 4px 15px rgba(0,0,0,0.2); z-index:1000;
+            width:300px;
+        }
+        .capa-item {
+            margin:10px 0; padding:10px;
+            background:#f5f5f5; border-radius:5px;
+        }
+        .color-box {
+            width:15px; height:15px;
+            margin-right:10px; border-radius:3px;
+        }
+        .filtro {
+            margin-top:10px; padding-top:10px;
+            border-top:1px solid #ddd;
+        }
+        .search-box {
+            width:100%; padding:8px; margin:5px 0;
+            border:1px solid #ddd; border-radius:4px;
+        }
+        .btn {
+            padding:8px; margin:5px 0;
+            background:#3498db; color:white;
+            border:none; border-radius:4px; cursor:pointer;
+        }
+        #loading {
+            position:fixed; top:50%; left:50%;
+            transform:translate(-50%,-50%);
+            background:white; padding:20px;
+            border-radius:10px; box-shadow:0 4px 15px rgba(0,0,0,0.2);
+            z-index:9999;
+        }
+    </style>
+</head>
+<body>
+    <!-- Mapa -->
+    <div id="map"></div>
+    
+    <!-- Panel de control -->
+    <div id="panel">
+        <h3>🗺️ Capas QGIS</h3>
+        <div id="capas-container">
+
+            <div class="capa-item" id="capa-item-0">
+                <div style="display:flex; align-items:center;">
+                    <div class="color-box" style="background:#FF0000"></div>
+                    <label style="flex:1; cursor:pointer;">
+                        <input type="checkbox" id="toggle-0" checked 
+                               onchange="toggleCapa(0)">
+                        Oficina (64)
+                    </label>
+                </div>
+                
+                <div class="filtro">
+                    <div style="font-size:12px; margin:5px 0;">Filtrar por Oficina:</div>
+                    <input type="text" class="search-box" id="search-0" 
+                           placeholder="Escribe oficina...">
+                    
+                    <button class="btn" onclick="filtrarCapa(0)" id="btn-filtrar-0">
+                        Aplicar Filtro
+                    </button>
+                    <button class="btn" onclick="limpiarFiltro(0)" 
+                            id="btn-limpiar-0" style="background:#e74c3c; display:none;">
+                        Limpiar Filtro
+                    </button>
+                </div>
+            </div>
+
+            <div class="capa-item" id="capa-item-1">
+                <div style="display:flex; align-items:center;">
+                    <div class="color-box" style="background:#00FF00"></div>
+                    <label style="flex:1; cursor:pointer;">
+                        <input type="checkbox" id="toggle-1" checked 
+                               onchange="toggleCapa(1)">
+                        Zonas (280)
+                    </label>
+                </div>
+                
+                <div class="filtro">
+                    <div style="font-size:12px; margin:5px 0;">Filtrar por Oficina:</div>
+                    <input type="text" class="search-box" id="search-1" 
+                           placeholder="Escribe oficina...">
+                    
+                    <button class="btn" onclick="filtrarCapa(1)" id="btn-filtrar-1">
+                        Aplicar Filtro
+                    </button>
+                    <button class="btn" onclick="limpiarFiltro(1)" 
+                            id="btn-limpiar-1" style="background:#e74c3c; display:none;">
+                        Limpiar Filtro
+                    </button>
+                </div>
+            </div>
+
+            <div class="capa-item" id="capa-item-2">
+                <div style="display:flex; align-items:center;">
+                    <div class="color-box" style="background:#0000FF"></div>
+                    <label style="flex:1; cursor:pointer;">
+                        <input type="checkbox" id="toggle-2" checked 
+                               onchange="toggleCapa(2)">
+                        Territorio (320)
+                    </label>
+                </div>
+                
+                <div class="filtro">
+                    <div style="font-size:12px; margin:5px 0;">Filtrar por Oficina:</div>
+                    <input type="text" class="search-box" id="search-2" 
+                           placeholder="Escribe oficina...">
+                    
+                    <button class="btn" onclick="filtrarCapa(2)" id="btn-filtrar-2">
+                        Aplicar Filtro
+                    </button>
+                    <button class="btn" onclick="limpiarFiltro(2)" 
+                            id="btn-limpiar-2" style="background:#e74c3c; display:none;">
+                        Limpiar Filtro
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    
+    <!-- Mensaje de carga -->
+    <div id="loading">
+        <h3>Cargando mapa...</h3>
+        <p id="loading-text">Por favor espera</p>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // ============================================
+        // CONFIGURACIÓN (SOLO METADATOS)
+        // ============================================
+        const capasConfig = [
+  {
+    "nombre": "Oficina",
+    "archivo": "oficina.geojson",
+    "elementos": 64,
+    "color": "#FF0000",
+    "tipo": "Punto",
+    "oficinas": [
+      "ABANCAY",
+      "ANDAHUAYLAS",
+      "AREQUIPA",
+      "ATE",
+      "AYACUCHO"
+    ]
+  },
+  {
+    "nombre": "Zonas",
+    "archivo": "zonas.geojson",
+    "elementos": 280,
+    "color": "#00FF00",
+    "tipo": "Pol\u00edgono",
+    "oficinas": [
+      "ABANCAY",
+      "ANDAHUAYLAS",
+      "AREQUIPA",
+      "ATE",
+      "AYACUCHO"
+    ]
+  },
+  {
+    "nombre": "Territorio",
+    "archivo": "territorio.geojson",
+    "elementos": 320,
+    "color": "#0000FF",
+    "tipo": "Pol\u00edgono",
+    "oficinas": [
+      "ABANCAY",
+      "ANDAHUAYLAS",
+      "AREQUIPA 01",
+      "AREQUIPA 02",
+      "ATE"
+    ]
+  }
+];
+        
+        // ============================================
+        // VARIABLES
+        // ============================================
+        const map = L.map('map').setView([-9.19, -75.0], 5);
+        const capasLeaflet = {};
+        const datosOriginales = {};
+        const filtrosActivos = {};
+        
+        // Capa base
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+        
+        // ============================================
+        // FUNCIONES PRINCIPALES
+        // ============================================
+        
+        // Cargar una capa desde archivo GeoJSON
+        async function cargarCapa(index) {
+            const capaInfo = capasConfig[index];
+            const loadingText = document.getElementById('loading-text');
+            
+            loadingText.textContent = `Cargando ${capaInfo.nombre}...`;
+            
+            try {
+                // CARGAR DESDE ARCHIVO, NO EMBEBIDO
+                const response = await fetch('data/' + capaInfo.archivo);
+                const datos = await response.json();
+                
+                console.log(`✅ ${capaInfo.nombre} cargada: ${datos.features.length} elementos`);
+                
+                // Guardar datos originales
+                datosOriginales[index] = datos;
+                
+                // Crear capa Leaflet
+                capasLeaflet[index] = L.geoJSON(datos, {
+                    style: {
+                        color: capaInfo.color,
+                        fillColor: capaInfo.color,
+                        fillOpacity: 0.4,
+                        weight: 2
+                    },
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties) {
+                            let contenido = `<div><h4>${capaInfo.nombre}</h4>`;
+                            for (let key in feature.properties) {
+                                if (feature.properties[key]) {
+                                    contenido += `<p><b>${key}:</b> ${feature.properties[key]}</p>`;
+                                }
+                            }
+                            contenido += '</div>';
+                            layer.bindPopup(contenido);
+                        }
+                    }
+                });
+                
+                // Agregar al mapa
+                capasLeaflet[index].addTo(map);
+                
+                // Inicializar filtro
+                filtrosActivos[index] = false;
+                
+                return true;
+                
+            } catch (error) {
+                console.error(`❌ Error cargando ${capaInfo.nombre}:`, error);
+                return false;
+            }
+        }
+        
+        // Cargar todas las capas
+        async function cargarTodasLasCapas() {
+            let cargadas = 0;
+            
+            for (let i = 0; i < capasConfig.length; i++) {
+                const cargado = await cargarCapa(i);
+                if (cargado) cargadas++;
+                
+                // Actualizar texto
+                document.getElementById('loading-text').textContent = 
+                    `Cargadas: ${cargadas} de ${capasConfig.length} capas`;
+            }
+            
+            // Ocultar loading
+            document.getElementById('loading').style.display = 'none';
+            
+            // Ajustar vista
+            ajustarVista();
+            
+            console.log(`✅ Todas las capas cargadas: ${cargadas}/${capasConfig.length}`);
+        }
+        
+        // Mostrar/ocultar capa
+        function toggleCapa(index) {
+            const checkbox = document.getElementById('toggle-' + index);
+            if (capasLeaflet[index]) {
+                if (checkbox.checked) {
+                    map.addLayer(capasLeaflet[index]);
+                } else {
+                    map.removeLayer(capasLeaflet[index]);
+                }
+            }
+        }
+        
+        // Filtrar por oficina
+        function filtrarCapa(index) {
+            const searchBox = document.getElementById('search-' + index);
+            const termino = searchBox.value.toLowerCase().trim();
+            
+            if (!termino) {
+                alert('Escribe una oficina para filtrar');
+                return;
+            }
+            
+            if (!datosOriginales[index]) {
+                alert('Los datos no están cargados');
+                return;
+            }
+            
+            // Filtrar features
+            const featuresFiltradas = datosOriginales[index].features.filter(feature => {
+                if (!feature.properties) return false;
+                
+                // Buscar campo OFICINA
+                for (let key in feature.properties) {
+                    if (key.toUpperCase().includes('OFICINA')) {
+                        const valor = String(feature.properties[key]).toLowerCase();
+                        return valor.includes(termino);
+                    }
+                }
+                return false;
+            });
+            
+            console.log(`Filtro aplicado a ${capasConfig[index].nombre}: ${featuresFiltradas.length} resultados`);
+            
+            if (featuresFiltradas.length === 0) {
+                alert('No se encontraron resultados');
+                return;
+            }
+            
+            // Crear nuevos datos filtrados
+            const datosFiltrados = {
+                type: 'FeatureCollection',
+                features: featuresFiltradas
+            };
+            
+            // Remover capa actual
+            if (capasLeaflet[index]) {
+                map.removeLayer(capasLeaflet[index]);
+            }
+            
+            // Crear nueva capa filtrada
+            capasLeaflet[index] = L.geoJSON(datosFiltrados, {
+                style: {
+                    color: '#FFA500',
+                    fillColor: '#FFA500',
+                    fillOpacity: 0.6,
+                    weight: 3
+                },
+                onEachFeature: function(feature, layer) {
+                    if (feature.properties) {
+                        let contenido = `<div><h4>${capasConfig[index].nombre} (Filtrado)</h4>`;
+                        for (let key in feature.properties) {
+                            if (feature.properties[key]) {
+                                contenido += `<p><b>${key}:</b> ${feature.properties[key]}</p>`;
+                            }
+                        }
+                        contenido += '</div>';
+                        layer.bindPopup(contenido);
+                    }
+                }
+            });
+            
+            // Agregar al mapa si está activa
+            const checkbox = document.getElementById('toggle-' + index);
+            if (checkbox && checkbox.checked) {
+                capasLeaflet[index].addTo(map);
+            }
+            
+            // Actualizar controles
+            filtrosActivos[index] = true;
+            document.getElementById('btn-filtrar-' + index).style.display = 'none';
+            document.getElementById('btn-limpiar-' + index).style.display = 'inline-block';
+            
+            // Ajustar vista a los resultados
+            ajustarVistaCapa(index);
+            
+            alert(`Encontrados: ${featuresFiltradas.length} elementos`);
+        }
+        
+        // Limpiar filtro
+        function limpiarFiltro(index) {
+            // Limpiar campo
+            document.getElementById('search-' + index).value = '';
+            
+            // Restaurar datos originales
+            if (!datosOriginales[index]) return;
+            
+            // Remover capa actual
+            if (capasLeaflet[index]) {
+                map.removeLayer(capasLeaflet[index]);
+            }
+            
+            // Crear nueva capa con datos originales
+            capasLeaflet[index] = L.geoJSON(datosOriginales[index], {
+                style: {
+                    color: capasConfig[index].color,
+                    fillColor: capasConfig[index].color,
+                    fillOpacity: 0.4,
+                    weight: 2
+                },
+                onEachFeature: function(feature, layer) {
+                    if (feature.properties) {
+                        let contenido = `<div><h4>${capasConfig[index].nombre}</h4>`;
+                        for (let key in feature.properties) {
+                            if (feature.properties[key]) {
+                                contenido += `<p><b>${key}:</b> ${feature.properties[key]}</p>`;
+                            }
+                        }
+                        contenido += '</div>';
+                        layer.bindPopup(contenido);
+                    }
+                }
+            });
+            
+            // Agregar al mapa si está activa
+            const checkbox = document.getElementById('toggle-' + index);
+            if (checkbox && checkbox.checked) {
+                capasLeaflet[index].addTo(map);
+            }
+            
+            // Actualizar controles
+            filtrosActivos[index] = false;
+            document.getElementById('btn-filtrar-' + index).style.display = 'inline-block';
+            document.getElementById('btn-limpiar-' + index).style.display = 'none';
+            
+            // Ajustar vista
+            ajustarVista();
+        }
+        
+        // Ajustar vista a todas las capas
+        function ajustarVista() {
+            setTimeout(() => {
+                let bounds = null;
+                
+                for (let index in capasLeaflet) {
+                    const capa = capasLeaflet[index];
+                    const checkbox = document.getElementById('toggle-' + index);
+                    
+                    if (capa && checkbox && checkbox.checked && capa.getBounds) {
+                        if (!bounds) {
+                            bounds = capa.getBounds();
+                        } else {
+                            bounds.extend(capa.getBounds());
+                        }
+                    }
+                }
+                
+                if (bounds && bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }, 500);
+        }
+        
+        // Ajustar vista a una capa específica
+        function ajustarVistaCapa(index) {
+            const capa = capasLeaflet[index];
+            if (capa && capa.getBounds) {
+                const bounds = capa.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }
+        }
+        
+        // ============================================
+        // INICIALIZACIÓN
+        // ============================================
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log("🚀 Inicializando mapa...");
+            cargarTodasLasCapas();
+        });
+        
+    </script>
+</body>
+</html>
